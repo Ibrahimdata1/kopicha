@@ -377,11 +377,9 @@ export default function SessionHistoryPage() {
                           </div>
                         ))}
                       </div>
-                      {!isCancelled && (
-                        <div className="flex justify-end px-4 py-2.5 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/50">
-                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{fmt(order.total_amount)}</span>
-                        </div>
-                      )}
+                      <div className={`flex justify-end px-4 py-2.5 border-t ${isCancelled ? 'border-red-200 dark:border-red-800/30 bg-red-50/30 dark:bg-red-900/10' : 'border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/50'}`}>
+                        <span className={`text-sm font-semibold ${isCancelled ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}`}>{fmt(order.total_amount)}</span>
+                      </div>
                     </div>
                     )
                   })}

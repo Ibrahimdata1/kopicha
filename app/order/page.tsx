@@ -73,6 +73,28 @@ const ORDER_STATUS_ICON: Record<string, React.ReactNode> = {
   completed: <CheckCircle2 size={13} />,
 }
 
+// ─── Cart merge helper ────────────────────────────────────────────────────────
+// Merges remote cart items into local cart. Uses max-qty strategy so
+// simultaneous adds from multiple devices are preserved.
+function mergeCarts(
+  local: CartEntry[],
+  remote: { productId: string; qty: number }[],
+  productsList: Product[],
+): CartEntry[] {
+  const merged = new Map<string, CartEntry>()
+  for (const entry of local) merged.set(entry.product.id, { ...entry })
+  for (const item of remote) {
+    const existing = merged.get(item.productId)
+    if (existing) {
+      existing.qty = Math.max(existing.qty, item.qty)
+    } else {
+      const product = productsList.find((p) => p.id === item.productId)
+      if (product) merged.set(item.productId, { product, qty: item.qty })
+    }
+  }
+  return Array.from(merged.values())
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function OrderPageContent() {
@@ -107,6 +129,8 @@ function OrderPageContent() {
     resolve: (v: boolean) => void
   } | null>(null)
 
+  // Unique client ID for broadcast (per browser tab)
+  const clientIdRef = useRef(typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36))
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
   function showConfirm(title: string, message: string) {
@@ -193,14 +217,27 @@ function OrderPageContent() {
     })()
   }, [sessionId])
 
-  // ── Realtime: order status + payment updates ───────────────────────────────
+  // ── Broadcast helper: send cart state to other devices ────────────────────
+  const broadcastCart = useCallback((updatedCart: CartEntry[]) => {
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'cart_sync',
+      payload: {
+        clientId: clientIdRef.current,
+        items: updatedCart.map((c) => ({ productId: c.product.id, qty: c.qty })),
+      },
+    })
+  }, [])
+
+  // ── Realtime: order status + payment updates + cart sync ─────────────────
   useEffect(() => {
     if (!sessionId || screen === 'loading' || screen === 'error') return
 
     channelRef.current = supabase
       .channel(`customer-session:${sessionId}`)
+      // Listen for both INSERT and UPDATE on orders (so other devices see new orders)
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'orders',
         filter: `customer_session_id=eq.${sessionId}`,
@@ -223,10 +260,27 @@ function OrderPageContent() {
           setTimeout(() => setScreen('paid'), 1500)
         }
       })
+      // Broadcast: sync cart between devices sharing the same session
+      .on('broadcast', { event: 'cart_sync' }, ({ payload }) => {
+        if (payload.clientId === clientIdRef.current) return // ignore own broadcasts
+        const remoteItems = payload.items as { productId: string; qty: number }[]
+        setCart((prev) => {
+          const merged = mergeCarts(prev, remoteItems, products)
+          saveCart(sessionId, merged)
+          return merged
+        })
+      })
+      // When another device places an order and clears cart
+      .on('broadcast', { event: 'cart_cleared' }, ({ payload }) => {
+        if (payload.clientId === clientIdRef.current) return
+        clearCart(sessionId)
+        setCart([])
+        loadPlacedOrders(sessionId)
+      })
       .subscribe()
 
     return () => { channelRef.current?.unsubscribe() }
-  }, [sessionId, screen])
+  }, [sessionId, screen, products])
 
   // ── QR countdown ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -252,6 +306,7 @@ function OrderPageContent() {
         ? prev.map((c) => c.product.id === product.id ? { ...c, qty: c.qty + 1 } : c)
         : [...prev, { product, qty: 1 }]
       saveCart(sessionId, updated)
+      broadcastCart(updated)
       return updated
     })
   }
@@ -267,6 +322,7 @@ function OrderPageContent() {
         .map((c) => c.product.id === productId ? { ...c, qty: Math.max(0, c.qty + delta) } : c)
         .filter((c) => c.qty > 0)
       saveCart(sessionId, updated)
+      broadcastCart(updated)
       if (updated.length === 0) setScreen('menu')
       return updated
     })
@@ -338,6 +394,12 @@ function OrderPageContent() {
 
       clearCart(sessionId)
       setCart([])
+      // Notify other devices that cart was cleared (order placed)
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'cart_cleared',
+        payload: { clientId: clientIdRef.current },
+      })
       setScreen('menu')
       await loadPlacedOrders(sessionId)
       setOrderSuccess(true)
@@ -743,7 +805,10 @@ function OrderPageContent() {
                 <button
                   onClick={async () => {
                     const ok = await showConfirm('ล้างตะกร้า', 'ต้องการลบสินค้าทั้งหมดออกจากตะกร้า?')
-                    if (ok) { clearCart(sessionId); setCart([]); setScreen('menu') }
+                    if (ok) {
+                      clearCart(sessionId); setCart([]); setScreen('menu')
+                      channelRef.current?.send({ type: 'broadcast', event: 'cart_cleared', payload: { clientId: clientIdRef.current } })
+                    }
                   }}
                   className="text-xs text-red-400 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 px-2 py-1 transition"
                 >

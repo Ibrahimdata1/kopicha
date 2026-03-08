@@ -15,8 +15,15 @@ interface Props {
 export default function GenerateSessionModal({ shop, profile, onClose, onCreated }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [tableLabel, setTableLabel] = useState('')
+
+  const tableCount = shop.table_count ?? 0
 
   const handleCreate = async () => {
+    if (!tableLabel.trim()) {
+      setError('กรุณาระบุหมายเลขโต๊ะ')
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -25,7 +32,7 @@ export default function GenerateSessionModal({ shop, profile, onClose, onCreated
         .from('customer_sessions')
         .insert({
           shop_id: shop.id,
-          table_label: null,
+          table_label: tableLabel.trim(),
           status: 'active',
           created_by: profile?.id ?? null,
         })
@@ -54,11 +61,45 @@ export default function GenerateSessionModal({ shop, profile, onClose, onCreated
           </button>
         </div>
 
-        <div className="text-center py-4 mb-6">
-          <div className="w-16 h-16 bg-primary-50 dark:bg-primary-950/60 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <QrCode size={28} className="text-primary-500" strokeWidth={1.5} />
+        {/* Table selection */}
+        <div className="mb-5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            หมายเลขโต๊ะ
+          </label>
+          {tableCount > 0 ? (
+            <div className="grid grid-cols-5 gap-2">
+              {Array.from({ length: tableCount }, (_, i) => String(i + 1)).map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setTableLabel(num)}
+                  className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    tableLabel === num
+                      ? 'bg-primary-500 text-white shadow-md shadow-primary-500/30'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={tableLabel}
+              onChange={(e) => setTableLabel(e.target.value)}
+              placeholder="เช่น 1, A2, ริมหน้าต่าง"
+              maxLength={20}
+              className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          )}
+        </div>
+
+        <div className="text-center py-2 mb-4">
+          <div className="w-12 h-12 bg-primary-50 dark:bg-primary-950/60 rounded-2xl flex items-center justify-center mx-auto mb-2">
+            <QrCode size={22} className="text-primary-500" strokeWidth={1.5} />
           </div>
-          <p className="text-slate-600 dark:text-slate-400 text-sm">
+          <p className="text-slate-600 dark:text-slate-400 text-xs">
             สร้าง QR Code สำหรับลูกค้าสแกนสั่งและชำระเงิน
           </p>
         </div>
@@ -75,10 +116,10 @@ export default function GenerateSessionModal({ shop, profile, onClose, onCreated
           </button>
           <button
             onClick={handleCreate}
-            disabled={loading}
+            disabled={loading || !tableLabel.trim()}
             className="btn-primary flex-1 py-3"
           >
-            {loading ? <span className="spinner-sm" /> : 'สร้างบิล'}
+            {loading ? <span className="spinner-sm" /> : `สร้างบิล${tableLabel ? ` โต๊ะ ${tableLabel}` : ''}`}
           </button>
         </div>
       </div>

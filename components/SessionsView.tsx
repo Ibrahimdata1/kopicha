@@ -149,6 +149,11 @@ export default function SessionsView({ shop, profile }: Props) {
                   <span className={status.badge}>{status.label}</span>
                   <span className="text-xs text-subtle">{timeAgo(session.created_at)}</span>
                 </div>
+                {session.table_label && (
+                  <p className="text-lg font-bold text-primary-600 dark:text-primary-400 mb-1">
+                    โต๊ะ {session.table_label}
+                  </p>
+                )}
                 <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1 tracking-tight">
                   {fmt(session.total_amount)}
                 </p>

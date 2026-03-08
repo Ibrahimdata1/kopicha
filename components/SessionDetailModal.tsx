@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Printer, X, Banknote, ArrowRightLeft, XCircle, CheckCircle2 } from 'lucide-react'
+import { Printer, X, Banknote, ArrowRightLeft, XCircle, CheckCircle2, MapPin } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import type { Profile, Shop } from '@/lib/types'
 import type { SessionWithOrders } from '@/components/SessionsView'
@@ -34,6 +34,8 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
   const [processing, setProcessing] = useState(false)
   const [cancellingItem, setCancellingItem] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [showChangeTable, setShowChangeTable] = useState(false)
+  const [newTableLabel, setNewTableLabel] = useState('')
 
   const supabase = createClient()
   const { confirm, ConfirmDialogUI } = useConfirm()
@@ -190,6 +192,35 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
     await markSessionPaid('cash', { received, change })
   }
 
+  const handleChangeTable = async () => {
+    if (!newTableLabel.trim()) return
+    setProcessing(true)
+    setError('')
+    try {
+      await supabase.from('customer_sessions')
+        .update({ table_label: newTableLabel.trim() })
+        .eq('id', session.id)
+
+      // Update table_number on all active orders
+      const activeOrderIds = session.orders
+        .filter((o) => !['cancelled', 'completed'].includes(o.status))
+        .map((o) => o.id)
+      if (activeOrderIds.length > 0) {
+        await supabase.from('orders')
+          .update({ table_number: newTableLabel.trim() })
+          .in('id', activeOrderIds)
+      }
+
+      setShowChangeTable(false)
+      setNewTableLabel('')
+      onRefresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   const handleCancelBill = async () => {
     const ok = await confirm({ title: 'ยกเลิกบิลนี้?', confirmLabel: 'ยกเลิกบิล', danger: true })
     if (!ok) return
@@ -272,7 +303,25 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0">
           <div className="flex items-center gap-3">
             <span className={billStatus.badge}>{billStatus.label}</span>
-            <span className="text-xs text-muted font-mono">{session.id.slice(0, 10)}...</span>
+            {session.table_label ? (
+              <button
+                onClick={() => { if (isActive) { setNewTableLabel(session.table_label ?? ''); setShowChangeTable(true) } }}
+                className={`flex items-center gap-1 text-sm font-bold text-primary-600 dark:text-primary-400 ${isActive ? 'hover:underline cursor-pointer' : ''}`}
+                disabled={!isActive}
+              >
+                <MapPin size={13} />
+                โต๊ะ {session.table_label}
+              </button>
+            ) : (
+              isActive && (
+                <button
+                  onClick={() => setShowChangeTable(true)}
+                  className="text-xs text-muted hover:text-primary-500 transition"
+                >
+                  + ระบุโต๊ะ
+                </button>
+              )
+            )}
           </div>
           <button
             onClick={onClose}
@@ -392,6 +441,65 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
       </div>
 
       {ConfirmDialogUI}
+
+      {/* Change table modal */}
+      {showChangeTable && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-xs p-6 animate-slide-up">
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-1">ย้ายโต๊ะ</h3>
+            <p className="text-sm text-muted mb-4">
+              {session.table_label ? `โต๊ะปัจจุบัน: ${session.table_label}` : 'ยังไม่ได้ระบุโต๊ะ'}
+            </p>
+
+            {shop.table_count > 0 ? (
+              <div className="grid grid-cols-5 gap-2 mb-4">
+                {Array.from({ length: shop.table_count }, (_, i) => String(i + 1)).map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setNewTableLabel(num)}
+                    className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      newTableLabel === num
+                        ? 'bg-primary-500 text-white shadow-md shadow-primary-500/30'
+                        : num === session.table_label
+                        ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 border border-primary-300 dark:border-primary-700'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={newTableLabel}
+                onChange={(e) => setNewTableLabel(e.target.value)}
+                placeholder="เลขโต๊ะใหม่"
+                maxLength={20}
+                autoFocus
+                className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
+              />
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowChangeTable(false); setNewTableLabel('') }}
+                className="btn-secondary flex-1 py-3"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleChangeTable}
+                disabled={processing || !newTableLabel.trim() || newTableLabel.trim() === session.table_label}
+                className="btn-primary flex-1 py-3"
+              >
+                {processing ? <span className="spinner-sm" /> : `ย้ายไปโต๊ะ ${newTableLabel}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cash payment modal */}
       {showCash && (
