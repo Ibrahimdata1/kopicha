@@ -49,6 +49,14 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
   cancelled: 'ยกเลิก',
 }
 
+const ORDER_STATUS_STYLE: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+  preparing: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+  ready: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400',
+  completed: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400',
+  cancelled: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+}
+
 function fmt(n: number) {
   return '฿' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
@@ -343,35 +351,40 @@ export default function SessionHistoryPage() {
                 <p className="text-center text-muted py-10">ไม่มีออเดอร์ใน session นี้</p>
               ) : (
                 <div className="space-y-4">
-                  {detailOrders.map((order, idx) => (
-                    <div key={order.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 dark:border-slate-700/50">
+                  {detailOrders.map((order, idx) => {
+                    const isCancelled = order.status === 'cancelled'
+                    return (
+                    <div key={order.id} className={`rounded-xl overflow-hidden border ${isCancelled ? 'border-red-200 dark:border-red-800/40 opacity-70' : 'border-slate-100 dark:border-slate-700/50'}`}>
+                      <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isCancelled ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40' : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-700/50'}`}>
                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                           ออเดอร์ #{idx + 1}
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted">{new Date(order.created_at).toLocaleTimeString('th-TH')}</span>
-                          <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ORDER_STATUS_STYLE[order.status] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                             {ORDER_STATUS_LABEL[order.status] ?? order.status}
                           </span>
                         </div>
                       </div>
-                      <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                      <div className={`divide-y ${isCancelled ? 'divide-red-100 dark:divide-red-800/30 bg-red-50/30 dark:bg-red-900/10' : 'divide-slate-100 dark:divide-slate-700/50'}`}>
                         {order.items.map((item) => (
                           <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-xs text-primary-600 dark:text-primary-400 font-semibold w-5 shrink-0">×{item.quantity}</span>
-                              <span className="text-sm text-slate-800 dark:text-slate-200 truncate">{item.product?.name ?? '-'}</span>
+                              <span className={`text-xs font-semibold w-5 shrink-0 ${isCancelled ? 'text-red-400 dark:text-red-500' : 'text-primary-600 dark:text-primary-400'}`}>×{item.quantity}</span>
+                              <span className={`text-sm truncate ${isCancelled ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>{item.product?.name ?? '-'}</span>
                             </div>
-                            <span className="text-sm text-slate-600 dark:text-slate-300 shrink-0 ml-2">{fmt(item.subtotal)}</span>
+                            <span className={`text-sm shrink-0 ml-2 ${isCancelled ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}`}>{fmt(item.subtotal)}</span>
                           </div>
                         ))}
                       </div>
-                      <div className="flex justify-end px-4 py-2.5 border-t border-slate-100 dark:border-slate-700/50">
-                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{fmt(order.total_amount)}</span>
-                      </div>
+                      {!isCancelled && (
+                        <div className="flex justify-end px-4 py-2.5 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/50">
+                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{fmt(order.total_amount)}</span>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
