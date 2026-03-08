@@ -25,6 +25,56 @@ const DEFAULT_FORM: ProductFormData = {
   image_url: '',
 }
 
+function validateProductForm(form: ProductFormData): string | null {
+  const name = form.name.trim()
+
+  // ── ชื่อสินค้า ──────────────────────────────────────────────────
+  if (!name) return 'กรุณากรอกชื่อสินค้า'
+  if (name.length > 100) return 'ชื่อสินค้ายาวเกินไป (สูงสุด 100 ตัวอักษร)'
+
+  // ตรวจสระซ้อน: สระ/วรรณยุกต์ไทย 2 ตัวติดกัน
+  if (/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]{2,}/.test(name)) {
+    return 'ชื่อสินค้ามีสระหรือวรรณยุกต์ซ้อนกัน'
+  }
+  // ชื่อที่เป็นอักขระพิเศษล้วนๆ (ไม่มีตัวอักษรหรือตัวเลขเลย)
+  if (!/[\u0E00-\u0E7Fa-zA-Z0-9]/.test(name)) {
+    return 'ชื่อสินค้าต้องมีตัวอักษรหรือตัวเลข'
+  }
+
+  // ── ราคา ────────────────────────────────────────────────────────
+  const priceStr = form.price.trim()
+  if (!priceStr) return 'กรุณากรอกราคา'
+  // ต้องเป็นตัวเลขล้วน ทศนิยมได้ 2 หลัก
+  if (!/^\d+(\.\d{1,2})?$/.test(priceStr)) return 'ราคาต้องเป็นตัวเลขเท่านั้น (เช่น 50 หรือ 49.99)'
+  const price = parseFloat(priceStr)
+  if (price < 1) return 'ราคาต้องมากกว่า 0'
+  if (price > 999999) return 'ราคาสูงเกินไป (สูงสุด 999,999 บาท)'
+
+  // ── Stock ────────────────────────────────────────────────────────
+  const stockStr = form.stock.trim()
+  if (stockStr === '') return 'กรุณากรอก Stock'
+  if (!/^\d+$/.test(stockStr)) return 'Stock ต้องเป็นจำนวนเต็มบวกเท่านั้น'
+  const stock = parseInt(stockStr)
+  if (stock < 0) return 'Stock ติดลบไม่ได้'
+  if (stock > 99999) return 'Stock สูงเกินไป (สูงสุด 99,999)'
+
+  // ── Barcode ──────────────────────────────────────────────────────
+  const barcode = form.barcode.trim()
+  if (barcode) {
+    if (barcode.length > 50) return 'Barcode ยาวเกินไป (สูงสุด 50 ตัวอักษร)'
+    if (!/^[a-zA-Z0-9\-_.]+$/.test(barcode)) return 'Barcode ใช้ได้เฉพาะ a-z, 0-9, -, _, .'
+  }
+
+  // ── Image URL ────────────────────────────────────────────────────
+  const imageUrl = form.image_url.trim()
+  if (imageUrl) {
+    if (!imageUrl.startsWith('https://')) return 'URL รูปภาพต้องขึ้นต้นด้วย https://'
+    if (imageUrl.length > 500) return 'URL รูปภาพยาวเกินไป'
+  }
+
+  return null
+}
+
 export default function ProductsPage() {
   const supabase = createClient()
   const [shop, setShop] = useState<Shop | null>(null)
@@ -92,14 +142,18 @@ export default function ProductsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!shop?.id) return
+
+    const validationError = validateProductForm(form)
+    if (validationError) { setError(validationError); return }
+
     setSaving(true)
     setError('')
     try {
       const payload = {
         shop_id: shop.id,
         name: form.name.trim(),
-        price: parseFloat(form.price) || 0,
-        stock: parseInt(form.stock) || 0,
+        price: parseFloat(form.price),
+        stock: parseInt(form.stock),
         category_id: form.category_id || null,
         barcode: form.barcode.trim() || null,
         is_active: form.is_active,
