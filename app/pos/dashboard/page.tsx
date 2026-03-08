@@ -57,10 +57,10 @@ export default function DashboardPage() {
         startDate = new Date(now)
         startDate.setDate(startDate.getDate() - 7)
       } else {
-        startDate = new Date(now)
-        startDate.setDate(1)
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
       }
 
+      // End of today (start of tomorrow)
       const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
 
       const [{ data: orders }, { data: sessions }] = await Promise.all([
@@ -77,8 +77,8 @@ export default function DashboardPage() {
       ])
 
       const orderCount = orders?.length ?? 0
-      const totalSales = orders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0
-      const avgPerOrder = orderCount > 0 ? totalSales / orderCount : 0
+      const totalSales = Math.round((orders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0) * 100) / 100
+      const avgPerOrder = orderCount > 0 ? Math.round((totalSales / orderCount) * 100) / 100 : 0
       const sessionCount = sessions?.length ?? 0
 
       setStats({ totalSales, orderCount, sessionCount, avgPerOrder })
@@ -118,6 +118,8 @@ export default function DashboardPage() {
       } else {
         setTopProducts([])
       }
+    } catch (err: unknown) {
+      console.error('fetchStats error:', err)
     } finally {
       setLoading(false)
     }

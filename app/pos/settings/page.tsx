@@ -92,12 +92,19 @@ export default function SettingsPage() {
 
   const handleCreateCashier = async (e: React.FormEvent) => {
     e.preventDefault()
+    const name = cashierName.trim()
+    const em = cashierEmail.trim().toLowerCase()
+    const pw = cashierPassword
+    if (!name || name.length < 2) { setError('กรุณากรอกชื่อพนักงาน (อย่างน้อย 2 ตัว)'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setError('รูปแบบอีเมลไม่ถูกต้อง'); return }
+    if (pw.length < 8) { setError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    if (!/[0-9]/.test(pw)) { setError('รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว'); return }
     setIsCreatingCashier(true)
     setCashierMsg('')
     setError('')
     try {
       const { data, error: fnErr } = await supabase.functions.invoke('create-cashier', {
-        body: { full_name: cashierName, email: cashierEmail, password: cashierPassword },
+        body: { full_name: name, email: em, password: pw },
       })
       if (fnErr || data?.error) throw new Error(fnErr?.message ?? data?.error ?? 'เกิดข้อผิดพลาด')
       setCashierMsg('สร้างบัญชีพนักงานสำเร็จ')

@@ -41,6 +41,7 @@ export default function SessionHistoryPage() {
   })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paid' | 'cancelled'>('all')
+  const [dateError, setDateError] = useState('')
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -55,6 +56,12 @@ export default function SessionHistoryPage() {
 
   const fetchHistory = useCallback(async () => {
     if (!shop?.id) return
+    if (dateFrom > dateTo) {
+      setDateError('วันเริ่มต้นต้องไม่มากกว่าวันสิ้นสุด')
+      setSessions([])
+      return
+    }
+    setDateError('')
     setLoading(true)
     try {
       let query = supabase
@@ -92,6 +99,9 @@ export default function SessionHistoryPage() {
       })
 
       setSessions(enriched)
+    } catch (err: unknown) {
+      console.error('fetchHistory error:', err)
+      setSessions([])
     } finally {
       setLoading(false)
     }
@@ -108,14 +118,30 @@ export default function SessionHistoryPage() {
       if (!el) return
       const w = window.open('', '_blank')
       if (!w) return
-      w.document.write(`<html><head><title>QR Session</title>
-        <style>body{font-family:sans-serif;padding:20px;text-align:center;}
-        h2{font-size:18px;margin:4px 0;}p{font-size:12px;color:#555;margin:2px 0;}
-        .url{font-size:10px;word-break:break-all;color:#888;margin-top:8px;}</style>
-        </head><body>${el.innerHTML}</body></html>`)
+      const shopNameSafe = (shop?.name ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c))
+      const urlSafe = encodeURIComponent(buildOrderUrl(session.id))
+      w.document.write(`<!DOCTYPE html><html><head><title>QR Session</title>
+        <style>
+          @page { size: 80mm auto; margin: 0; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          html, body { height: 100%; }
+          body { font-family: 'Courier New', monospace; width: 100%; padding: 4mm; text-align: center; background: #fff; color: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+          h2 { font-size: 14pt; font-weight: bold; margin-bottom: 2mm; }
+          p { font-size: 9pt; color: #444; margin: 1.5mm 0; }
+          .qr-wrap { margin: 6mm auto; display: block; width: 65mm; height: 65mm; }
+          .qr-wrap svg { width: 100% !important; height: 100% !important; display: block; }
+          .url { font-size: 7pt; word-break: break-all; color: #888; margin-top: 3mm; }
+        </style>
+        </head><body>
+        <h2>${shopNameSafe}</h2>
+        <div class="qr-wrap">${el.querySelector('svg')?.outerHTML ?? ''}</div>
+        <p>สแกนเพื่อสั่งและชำระเงิน</p>
+        <p class="url">${decodeURIComponent(urlSafe)}</p>
+        </body></html>`)
       w.document.close()
       w.print()
-    }, 100)
+      setPrintSession(null)
+    }, 150)
   }
 
   return (
@@ -175,6 +201,11 @@ export default function SessionHistoryPage() {
           ค้นหา
         </button>
       </div>
+      {dateError && (
+        <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm px-4 py-2.5 rounded-xl border border-red-100 dark:border-red-800/40 mb-4">
+          {dateError}
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
@@ -185,6 +216,12 @@ export default function SessionHistoryPage() {
       ) : sessions.length === 0 ? (
         <div className="text-center py-12 text-muted">ไม่พบ session ในช่วงเวลานี้</div>
       ) : (
+        <>
+        {sessions.length >= 100 && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm px-4 py-2.5 rounded-xl border border-amber-200 dark:border-amber-800/40 mb-4">
+            แสดง 100 รายการล่าสุด — ลองเลือกช่วงเวลาที่สั้นลง
+          </div>
+        )}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 shadow-sm overflow-hidden">
           {sessions.map((session) => (
             <div key={session.id} className="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
@@ -213,6 +250,7 @@ export default function SessionHistoryPage() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       {/* Hidden print element */}

@@ -273,6 +273,15 @@ function OrderPageContent() {
   // ── Place order (send to kitchen) ─────────────────────────────────────────
   const handlePlaceOrder = async () => {
     if (!session || cart.length === 0) return
+
+    // Race condition guard: re-verify session is still active before placing order
+    const { data: freshSession } = await supabase
+      .from('customer_sessions').select('status').eq('id', session.id).single()
+    if (freshSession?.status !== 'active') {
+      setDialog({ title: 'ไม่สามารถสั่งได้', message: 'บิลนี้ปิดหรือชำระเงินแล้ว', resolve: () => {} })
+      return
+    }
+
     const ok = await showConfirm(
       'ยืนยันการสั่ง',
       `${cartQty} รายการ รวม ${fmt(cartTotal)}\nออเดอร์จะส่งไปยังครัวทันที`
@@ -282,8 +291,9 @@ function OrderPageContent() {
     setIsPlacing(true)
     const snapshot = [...cart]
     try {
-      const subtotal = cartTotal
-      const taxAmount = subtotal * (taxRate / (1 + taxRate))
+      // Round to avoid floating-point issues
+      const subtotal = Math.round(cartTotal * 100) / 100
+      const taxAmount = Math.round(subtotal * (taxRate / (1 + taxRate)) * 100) / 100
 
       const { data: order, error: orderErr } = await supabase
         .from('orders')
@@ -346,7 +356,10 @@ function OrderPageContent() {
   const handleShowPayment = () => {
     const unpaidOrders = placedOrders.filter((o) => o.payment?.status !== 'success' && o.status !== 'cancelled')
     const total = unpaidOrders.reduce((s, o) => s + (o.total_amount ?? 0), 0)
-    if (total <= 0) return
+    if (total <= 0) {
+      setDialog({ title: 'ไม่มียอดที่ต้องชำระ', message: 'ยังไม่มีออเดอร์ที่ค้างชำระ', resolve: () => {} })
+      return
+    }
 
     let qr = ''
     if (promptpayId) {

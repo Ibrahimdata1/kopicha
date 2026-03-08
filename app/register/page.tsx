@@ -18,18 +18,28 @@ export default function RegisterPage() {
 
   const handleAccountStep = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!fullName.trim() || !email.trim() || password.length < 6) {
-      setError('กรุณากรอกข้อมูลให้ครบถ้วน (รหัสผ่านอย่างน้อย 6 ตัว)')
-      return
-    }
+    const name = fullName.trim()
+    if (!name) { setError('กรุณากรอกชื่อ-นามสกุล'); return }
+    if (name.length < 2) { setError('ชื่อสั้นเกินไป'); return }
+    if (name.length > 100) { setError('ชื่อยาวเกินไป'); return }
+    if (!email.trim()) { setError('กรุณากรอกอีเมล'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('รูปแบบอีเมลไม่ถูกต้อง'); return }
+    if (password.length < 8) { setError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    if (!/[0-9]/.test(password)) { setError('รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว'); return }
     setError('')
     setStep('shop')
   }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!shopName.trim() || !promptpay.trim()) {
-      setError('กรุณากรอกชื่อร้านและหมายเลข PromptPay')
+    const name = shopName.trim()
+    const pp = promptpay.trim()
+    if (!name) { setError('กรุณากรอกชื่อร้าน'); return }
+    if (name.length < 2 || name.length > 100) { setError('ชื่อร้านต้องมี 2-100 ตัวอักษร'); return }
+    if (!pp) { setError('กรุณากรอกหมายเลข PromptPay'); return }
+    const ppDigits = pp.replace(/\D/g, '')
+    if (ppDigits.length !== 10 && ppDigits.length !== 13) {
+      setError('PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขนิติบุคคล 13 หลัก')
       return
     }
     setLoading(true)
@@ -123,7 +133,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="input"
-                  placeholder="อย่างน้อย 6 ตัวอักษร"
+                  placeholder="อย่างน้อย 8 ตัว มีตัวเลขด้วย"
                   required
                   minLength={6}
                 />

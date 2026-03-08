@@ -38,10 +38,19 @@ export function generatePromptPayPayload(
   amount: number
 ): string {
   if (!promptPayId || !promptPayId.trim()) throw new Error('PromptPay ID is required')
+
+  const digits = promptPayId.replace(/\D/g, '')
+  if (digits.length !== 10 && digits.length !== 13) {
+    throw new Error('PromptPay ID ต้องเป็นเบอร์โทร 10 หลัก หรือเลขประจำตัวผู้เสียภาษี 13 หลัก')
+  }
+
   if (amount <= 0) throw new Error('Amount must be greater than 0')
   if (amount > 999999) throw new Error('Amount must not exceed 999,999')
 
-  const isPhone = promptPayId.replace(/\D/g, '').length <= 10
+  // Round to 2 decimal places to avoid floating-point precision issues
+  const roundedAmount = Math.round(amount * 100) / 100
+
+  const isPhone = digits.length <= 10
 
   const aid = tlv('00', 'A000000677010111')
   let accountInfo: string
@@ -56,7 +65,7 @@ export function generatePromptPayPayload(
   payload += tlv('01', '12')
   payload += tlv('29', accountInfo)
   payload += tlv('53', '764')
-  payload += tlv('54', amount.toFixed(2))
+  payload += tlv('54', roundedAmount.toFixed(2))
   payload += tlv('58', 'TH')
   payload += tlv('62', tlv('05', generateQRReference()))
 
