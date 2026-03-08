@@ -246,7 +246,9 @@ function OrderPageContent() {
 
   const addToCart = (product: Product) => {
     setCart((prev) => {
-      const updated = prev.find((c) => c.product.id === product.id)
+      const existing = prev.find((c) => c.product.id === product.id)
+      if (existing && product.stock > 0 && existing.qty >= product.stock) return prev
+      const updated = existing
         ? prev.map((c) => c.product.id === product.id ? { ...c, qty: c.qty + 1 } : c)
         : [...prev, { product, qty: 1 }]
       saveCart(sessionId, updated)
@@ -650,12 +652,11 @@ function OrderPageContent() {
                 {/* Image */}
                 <div className="relative h-32 bg-gray-100 dark:bg-slate-700">
                   {product.image_url ? (
-                    <Image src={product.image_url} alt={product.name} fill className="object-cover" />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Package size={28} className="text-gray-300 dark:text-slate-500" />
-                    </div>
-                  )}
+                    <Image src={product.image_url} alt={product.name} fill className="object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                  ) : null}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Package size={28} className="text-gray-300 dark:text-slate-500" />
+                  </div>
                   {outOfStock && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                       <span className="bg-white text-gray-700 text-xs font-bold px-3 py-1 rounded-full">หมด</span>
@@ -759,7 +760,7 @@ function OrderPageContent() {
                 <div key={c.product.id} className="flex items-center gap-3">
                   {c.product.image_url && (
                     <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 relative bg-gray-100 dark:bg-slate-700">
-                      <Image src={c.product.image_url} alt={c.product.name} fill className="object-cover" />
+                      <Image src={c.product.image_url} alt={c.product.name} fill className="object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">

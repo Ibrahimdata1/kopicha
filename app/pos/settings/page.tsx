@@ -73,12 +73,22 @@ export default function SettingsPage() {
   const handleSaveShop = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!shop?.id) return
+    const name = shopName.trim()
+    const pp = promptpay.trim()
+    if (!name || name.length < 2) { setError('ชื่อร้านต้องมีอย่างน้อย 2 ตัวอักษร'); return }
+    if (name.length > 100) { setError('ชื่อร้านยาวเกินไป'); return }
+    if (!pp) { setError('กรุณากรอกหมายเลข PromptPay'); return }
+    const ppDigits = pp.replace(/\D/g, '')
+    if (ppDigits.length !== 10 && ppDigits.length !== 13) {
+      setError('PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขนิติบุคคล 13 หลัก')
+      return
+    }
     setIsSavingShop(true)
     setError('')
     try {
       const { error: updateErr } = await supabase
         .from('shops')
-        .update({ name: shopName.trim(), promptpay_id: promptpay.trim() })
+        .update({ name, promptpay_id: pp })
         .eq('id', shop.id)
       if (updateErr) throw updateErr
       setShopSaved(true)

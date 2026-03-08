@@ -118,8 +118,9 @@ export default function SessionHistoryPage() {
       if (!el) return
       const w = window.open('', '_blank')
       if (!w) return
-      const shopNameSafe = (shop?.name ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c))
-      const urlSafe = encodeURIComponent(buildOrderUrl(session.id))
+      const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c] ?? c))
+      const orderUrl = buildOrderUrl(session.id)
+      const svgHtml = el.querySelector('svg')?.outerHTML ?? ''
       w.document.write(`<!DOCTYPE html><html><head><title>QR Session</title>
         <style>
           @page { size: 80mm auto; margin: 0; }
@@ -133,10 +134,10 @@ export default function SessionHistoryPage() {
           .url { font-size: 7pt; word-break: break-all; color: #888; margin-top: 3mm; }
         </style>
         </head><body>
-        <h2>${shopNameSafe}</h2>
-        <div class="qr-wrap">${el.querySelector('svg')?.outerHTML ?? ''}</div>
+        <h2>${esc(shop?.name ?? '')}</h2>
+        <div class="qr-wrap">${svgHtml}</div>
         <p>สแกนเพื่อสั่งและชำระเงิน</p>
-        <p class="url">${decodeURIComponent(urlSafe)}</p>
+        <p class="url">${esc(orderUrl)}</p>
         </body></html>`)
       w.document.close()
       w.print()

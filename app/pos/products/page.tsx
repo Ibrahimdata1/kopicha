@@ -259,7 +259,7 @@ export default function ProductsPage() {
             <div key={product.id} className={`flex items-center gap-4 p-4 hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors ${!product.is_active ? 'opacity-50' : ''}`}>
               <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-slate-800 overflow-hidden shrink-0 relative">
                 {product.image_url ? (
-                  <Image src={product.image_url} alt={product.name} fill className="object-cover" />
+                  <Image src={product.image_url} alt={product.name} fill className="object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-gray-300 dark:text-slate-600">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>

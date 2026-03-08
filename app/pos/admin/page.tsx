@@ -37,6 +37,7 @@ export default function AdminPage() {
   const [shops, setShops] = useState<ShopRow[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const { confirm, ConfirmDialogUI } = useConfirm()
@@ -106,11 +107,14 @@ export default function AdminPage() {
     const ok = await confirm({ title: 'ปฏิเสธคำขอนี้?', confirmLabel: 'ปฏิเสธ', danger: true })
     if (!ok) return
     setError('')
+    setActionLoading(userId)
     try {
       await supabase.from('profiles').update({ pending_shop_name: null, pending_promptpay: null }).eq('id', userId)
       setPendingUsers((prev) => prev.filter((u) => u.id !== userId))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -118,6 +122,7 @@ export default function AdminPage() {
     const ok = await confirm({ title: `ยกเลิกสิทธิ์ร้าน "${shopName}"?`, message: 'ผู้ใช้จะเข้าระบบไม่ได้จนกว่าจะอนุมัติใหม่', confirmLabel: 'ยกเลิกสิทธิ์', danger: true })
     if (!ok) return
     setError('')
+    setActionLoading(ownerId)
     try {
       await supabase.from('profiles').update({ role: null, shop_id: null }).eq('id', ownerId)
       setSuccessMsg('ยกเลิกสิทธิ์เรียบร้อย')
@@ -125,6 +130,8 @@ export default function AdminPage() {
       await loadData()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -132,6 +139,7 @@ export default function AdminPage() {
     const ok = await confirm({ title: `ลบร้าน "${shopName}"?`, message: 'ข้อมูลสินค้า หมวดหมู่ และทีมงานจะถูกลบทั้งหมด', confirmLabel: 'ลบร้าน', danger: true })
     if (!ok) return
     setError('')
+    setActionLoading(shopId)
     try {
       // Remove all owners from this shop first
       await supabase.from('profiles').update({ role: null, shop_id: null }).eq('shop_id', shopId).eq('role', 'owner')
@@ -142,6 +150,8 @@ export default function AdminPage() {
       setTimeout(() => setSuccessMsg(''), 3000)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -212,14 +222,16 @@ export default function AdminPage() {
                 <div className="flex gap-2 shrink-0">
                   <button
                     onClick={() => handleReject(user.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-slate-600 hover:border-red-300 dark:hover:border-red-600 rounded-lg transition-colors"
+                    disabled={actionLoading === user.id}
+                    className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-slate-600 hover:border-red-300 dark:hover:border-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
                     title="ปฏิเสธ"
                   >
                     <X size={15} />
                   </button>
                   <button
                     onClick={() => handleApprove(user)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                    disabled={actionLoading === user.id}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
                   >
                     <Check size={14} />
                     อนุมัติ
@@ -279,14 +291,16 @@ export default function AdminPage() {
                   {shop.owner && (
                     <button
                       onClick={() => handleDeactivateOwner(shop.owner!.id, shop.name)}
-                      className="text-xs px-3 py-1.5 border border-orange-200 dark:border-orange-700/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg font-medium transition-colors"
+                      disabled={actionLoading === shop.owner.id || actionLoading === shop.id}
+                      className="text-xs px-3 py-1.5 border border-orange-200 dark:border-orange-700/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none"
                     >
                       ยกเลิกสิทธิ์
                     </button>
                   )}
                   <button
                     onClick={() => handleDeleteShop(shop.id, shop.name)}
-                    className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-slate-600 hover:border-red-300 dark:hover:border-red-600 rounded-lg transition-colors"
+                    disabled={actionLoading === shop.id}
+                    className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-slate-600 hover:border-red-300 dark:hover:border-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
                     title="ลบร้าน"
                   >
                     <Trash2 size={15} />
