@@ -224,10 +224,10 @@ export default function SettingsPage() {
                 max="200"
                 value={tableCount}
                 onChange={(e) => setTableCount(e.target.value)}
-                placeholder="0 = กรอกเอง"
+                placeholder="เช่น 10, 20"
                 className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
               />
-              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">ตั้งจำนวนโต๊ะเพื่อให้เลือกเลขโต๊ะจากปุ่ม ถ้าเป็น 0 จะกรอกเลขโต๊ะเอง</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">ตั้งจำนวนโต๊ะเพื่อให้เลือกเลขโต๊ะจากปุ่มตอนสร้างบิล</p>
             </div>
             <button
               type="submit"
