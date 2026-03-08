@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import type { PendingUser } from '@/lib/types'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 interface ShopRow {
   id: string
@@ -38,6 +39,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const { confirm, ConfirmDialogUI } = useConfirm()
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -101,7 +103,8 @@ export default function AdminPage() {
   }
 
   const handleReject = async (userId: string) => {
-    if (!window.confirm('ปฏิเสธและลบคำขอนี้?')) return
+    const ok = await confirm({ title: 'ปฏิเสธคำขอนี้?', confirmLabel: 'ปฏิเสธ', danger: true })
+    if (!ok) return
     setError('')
     try {
       await supabase.from('profiles').update({ pending_shop_name: null, pending_promptpay: null }).eq('id', userId)
@@ -112,7 +115,8 @@ export default function AdminPage() {
   }
 
   const handleDeactivateOwner = async (ownerId: string, shopName: string) => {
-    if (!window.confirm(`ยกเลิกสิทธิ์เจ้าของร้าน "${shopName}"?\nผู้ใช้จะไม่สามารถเข้าระบบได้จนกว่าจะอนุมัติใหม่`)) return
+    const ok = await confirm({ title: `ยกเลิกสิทธิ์ร้าน "${shopName}"?`, message: 'ผู้ใช้จะเข้าระบบไม่ได้จนกว่าจะอนุมัติใหม่', confirmLabel: 'ยกเลิกสิทธิ์', danger: true })
+    if (!ok) return
     setError('')
     try {
       await supabase.from('profiles').update({ role: null, shop_id: null }).eq('id', ownerId)
@@ -125,7 +129,8 @@ export default function AdminPage() {
   }
 
   const handleDeleteShop = async (shopId: string, shopName: string) => {
-    if (!window.confirm(`ลบร้าน "${shopName}" ทั้งหมด?\nข้อมูลสินค้า หมวดหมู่ และทีมงานจะถูกลบด้วย`)) return
+    const ok = await confirm({ title: `ลบร้าน "${shopName}"?`, message: 'ข้อมูลสินค้า หมวดหมู่ และทีมงานจะถูกลบทั้งหมด', confirmLabel: 'ลบร้าน', danger: true })
+    if (!ok) return
     setError('')
     try {
       // Remove all owners from this shop first
@@ -150,6 +155,7 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      {ConfirmDialogUI}
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-xl flex items-center justify-center">

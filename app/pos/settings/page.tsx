@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import type { PendingUser, Profile, Shop, TeamMember } from '@/lib/types'
+import { useConfirm } from '@/components/ConfirmDialog'
 import {
   Check,
   Clock,
@@ -17,6 +18,7 @@ import {
 
 export default function SettingsPage() {
   const supabase = createClient()
+  const { confirm, ConfirmDialogUI } = useConfirm()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [shop, setShop] = useState<Shop | null>(null)
   const [team, setTeam] = useState<TeamMember[]>([])
@@ -110,7 +112,8 @@ export default function SettingsPage() {
   }
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!window.confirm('ลบสมาชิกออกจากทีม?')) return
+    const ok = await confirm({ title: 'ลบสมาชิกออกจากทีม?', confirmLabel: 'ลบ', danger: true })
+    if (!ok) return
     try {
       const { error: rpcErr } = await supabase.rpc('remove_team_member', { p_profile_id: memberId })
       if (rpcErr) throw rpcErr
@@ -150,6 +153,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      {ConfirmDialogUI}
       <h1 className="page-title flex items-center gap-2">
         <Settings2 size={20} className="text-subtle" />
         ตั้งค่า

@@ -5,7 +5,8 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Printer, X, Banknote, ArrowRightLeft, XCircle, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import type { Profile, Shop } from '@/lib/types'
-import type { SessionWithOrders } from '@/app/pos/sessions/page'
+import type { SessionWithOrders } from '@/components/SessionsView'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 interface Props {
   session: SessionWithOrders
@@ -35,6 +36,7 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
   const [error, setError] = useState('')
 
   const supabase = createClient()
+  const { confirm, ConfirmDialogUI } = useConfirm()
 
   const isPaid = session.status === 'paid'
   const isCancelled = session.status === 'cancelled'
@@ -162,7 +164,12 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
   }
 
   const handleTransferPay = async () => {
-    if (!window.confirm(`ยืนยันรับโอนเงิน\nยอด ${fmt(session.total_amount)}\nโดย: ${profile?.full_name ?? 'พนักงาน'}`)) return
+    const ok = await confirm({
+      title: 'ยืนยันรับโอนเงิน',
+      message: `ยอด ${fmt(session.total_amount)} · โดย: ${profile?.full_name ?? 'พนักงาน'}`,
+      confirmLabel: 'ยืนยันรับโอน',
+    })
+    if (!ok) return
     await markSessionPaid('transfer')
   }
 
@@ -174,12 +181,18 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
       return
     }
     const change = received - total
-    if (!window.confirm(`รับเงินสด ${fmt(received)} ทอน ${fmt(change)}`)) return
+    const ok = await confirm({
+      title: 'ยืนยันรับเงินสด',
+      message: `รับ ${fmt(received)} · ทอน ${fmt(change)}`,
+      confirmLabel: 'ยืนยัน',
+    })
+    if (!ok) return
     await markSessionPaid('cash', { received, change })
   }
 
   const handleCancelBill = async () => {
-    if (!window.confirm('ยกเลิกบิลนี้?')) return
+    const ok = await confirm({ title: 'ยกเลิกบิลนี้?', confirmLabel: 'ยกเลิกบิล', danger: true })
+    if (!ok) return
     setProcessing(true)
     setError('')
     try {
@@ -212,7 +225,8 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
   }
 
   const handleCancelItem = async (orderId: string, itemId: string) => {
-    if (!window.confirm('ยกเลิกรายการนี้?')) return
+    const ok = await confirm({ title: 'ยกเลิกรายการนี้?', confirmLabel: 'ยกเลิก', danger: true })
+    if (!ok) return
     setCancellingItem(itemId)
     setError('')
     try {
@@ -376,6 +390,8 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
           )}
         </div>
       </div>
+
+      {ConfirmDialogUI}
 
       {/* Cash payment modal */}
       {showCash && (
