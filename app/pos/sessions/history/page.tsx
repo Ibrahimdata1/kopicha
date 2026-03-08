@@ -5,11 +5,28 @@ import { createClient } from '@/lib/supabase-browser'
 import type { CustomerSession, Shop } from '@/lib/types'
 import { QRCodeSVG } from 'qrcode.react'
 import { buildOrderUrl } from '@/lib/qr'
-import { ArrowLeft, Printer, Search } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Printer, Search, X } from 'lucide-react'
 
 type HistorySession = CustomerSession & {
   total_amount: number
   order_count: number
+}
+
+interface OrderItem {
+  id: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  item_status: string
+  product: { name: string } | null
+}
+
+interface OrderDetail {
+  id: string
+  status: string
+  total_amount: number
+  created_at: string
+  items: OrderItem[]
 }
 
 const SESSION_STATUS_LABEL: Record<string, string> = {
@@ -24,6 +41,14 @@ const SESSION_STATUS_STYLE: Record<string, string> = {
   cancelled: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
 }
 
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  pending: 'รอรับออเดอร์',
+  preparing: 'กำลังทำ',
+  ready: 'พร้อมเสิร์ฟ',
+  completed: 'เสร็จแล้ว',
+  cancelled: 'ยกเลิก',
+}
+
 function fmt(n: number) {
   return '฿' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
@@ -34,6 +59,9 @@ export default function SessionHistoryPage() {
   const [sessions, setSessions] = useState<HistorySession[]>([])
   const [loading, setLoading] = useState(true)
   const [printSession, setPrintSession] = useState<HistorySession | null>(null)
+  const [detailSession, setDetailSession] = useState<HistorySession | null>(null)
+  const [detailOrders, setDetailOrders] = useState<OrderDetail[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - 7)
@@ -45,11 +73,13 @@ export default function SessionHistoryPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
+      if (!user) { setLoading(false); return }
       const { data: p } = await supabase.from('profiles').select('shop_id').eq('id', user.id).single()
       if (p?.shop_id) {
         const { data: s } = await supabase.from('shops').select('*').eq('id', p.shop_id).single()
         setShop(s)
+      } else {
+        setLoading(false)
       }
     })
   }, [])
@@ -84,7 +114,6 @@ export default function SessionHistoryPage() {
         return
       }
 
-      // Fetch order totals for each session
       const sessionIds = rawSessions.map((s) => s.id)
       const { data: orders } = await supabase
         .from('orders')
@@ -111,7 +140,24 @@ export default function SessionHistoryPage() {
     if (shop?.id) fetchHistory()
   }, [shop?.id, fetchHistory])
 
-  const handlePrint = (session: HistorySession) => {
+  const handleOpenDetail = async (session: HistorySession) => {
+    setDetailSession(session)
+    setDetailOrders([])
+    setDetailLoading(true)
+    try {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, status, total_amount, created_at, items:order_items(id, quantity, unit_price, subtotal, item_status, product:products(name))')
+        .eq('customer_session_id', session.id)
+        .order('created_at', { ascending: true })
+      setDetailOrders((data ?? []) as unknown as OrderDetail[])
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const handlePrint = (session: HistorySession, e: React.MouseEvent) => {
+    e.stopPropagation()
     setPrintSession(session)
     setTimeout(() => {
       const el = document.getElementById('print-qr')
@@ -157,7 +203,7 @@ export default function SessionHistoryPage() {
         </a>
         <div>
           <h1 className="page-title">ประวัติ QR Sessions</h1>
-          <p className="text-muted text-sm">ดูและพิมพ์ QR code ซ้ำสำหรับ session ที่ผ่านมา</p>
+          <p className="text-muted text-sm">กดที่รายการเพื่อดูรายละเอียดออเดอร์</p>
         </div>
       </div>
 
@@ -225,7 +271,11 @@ export default function SessionHistoryPage() {
         )}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 shadow-sm overflow-hidden">
           {sessions.map((session) => (
-            <div key={session.id} className="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+            <button
+              key={session.id}
+              onClick={() => handleOpenDetail(session)}
+              className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition text-left"
+            >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -241,17 +291,100 @@ export default function SessionHistoryPage() {
                   {session.order_count > 0 && ` · ${session.order_count} ออเดอร์ · ${fmt(session.total_amount)}`}
                 </p>
               </div>
-              <button
-                onClick={() => handlePrint(session)}
-                className="btn-secondary shrink-0 px-3 py-2 text-sm flex items-center gap-1.5"
-              >
-                <Printer size={14} />
-                พิมพ์ QR ซ้ำ
-              </button>
-            </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={(e) => handlePrint(session, e)}
+                  className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5"
+                >
+                  <Printer size={14} />
+                  พิมพ์ QR ซ้ำ
+                </button>
+                <ChevronRight size={16} className="text-slate-400 dark:text-slate-500" />
+              </div>
+            </button>
           ))}
         </div>
         </>
+      )}
+
+      {/* Detail Modal */}
+      {detailSession && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setDetailSession(null)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
+              <div>
+                <h2 className="font-semibold text-slate-900 dark:text-slate-100">
+                  {detailSession.table_label ? `โต๊ะ ${detailSession.table_label}` : 'ไม่ระบุโต๊ะ'}
+                </h2>
+                <p className="text-xs text-muted mt-0.5">
+                  {new Date(detailSession.created_at).toLocaleString('th-TH')}
+                  {' · '}
+                  <span className={`inline-block px-1.5 py-0.5 rounded font-medium ${SESSION_STATUS_STYLE[detailSession.status]}`}>
+                    {SESSION_STATUS_LABEL[detailSession.status]}
+                  </span>
+                </p>
+              </div>
+              <button onClick={() => setDetailSession(null)} className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              {detailLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="spinner w-7 h-7 border-[3px]" />
+                </div>
+              ) : detailOrders.length === 0 ? (
+                <p className="text-center text-muted py-10">ไม่มีออเดอร์ใน session นี้</p>
+              ) : (
+                <div className="space-y-4">
+                  {detailOrders.map((order, idx) => (
+                    <div key={order.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 dark:border-slate-700/50">
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          ออเดอร์ #{idx + 1}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted">{new Date(order.created_at).toLocaleTimeString('th-TH')}</span>
+                          <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">
+                            {ORDER_STATUS_LABEL[order.status] ?? order.status}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                        {order.items.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-xs text-primary-600 dark:text-primary-400 font-semibold w-5 shrink-0">×{item.quantity}</span>
+                              <span className="text-sm text-slate-800 dark:text-slate-200 truncate">{item.product?.name ?? '-'}</span>
+                            </div>
+                            <span className="text-sm text-slate-600 dark:text-slate-300 shrink-0 ml-2">{fmt(item.subtotal)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end px-4 py-2.5 border-t border-slate-100 dark:border-slate-700/50">
+                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{fmt(order.total_amount)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            {detailSession.total_amount > 0 && (
+              <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                <span className="font-medium text-slate-700 dark:text-slate-300">ยอดรวมทั้งหมด</span>
+                <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{fmt(detailSession.total_amount)}</span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Hidden print element */}
