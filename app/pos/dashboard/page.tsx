@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import type { Shop } from '@/lib/types'
+import { usePosContext } from '@/lib/pos-context'
 import { BarChart3, QrCode, Receipt, TrendingUp } from 'lucide-react'
 
 interface Stats {
@@ -25,24 +25,11 @@ function fmt(n: number) {
 
 export default function DashboardPage() {
   const supabase = createClient()
-  const [shop, setShop] = useState<Shop | null>(null)
+  const { shop } = usePosContext()
   const [stats, setStats] = useState<Stats>({ totalSales: 0, orderCount: 0, sessionCount: 0, avgPerOrder: 0 })
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('today')
-
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      const { data: p } = await supabase.from('profiles').select('shop_id').eq('id', user.id).single()
-      if (p?.shop_id) {
-        const { data: s } = await supabase.from('shops').select('*').eq('id', p.shop_id).single()
-        setShop(s)
-      } else {
-        setLoading(false)
-      }
-    })
-  }, [])
 
   const fetchStats = useCallback(async () => {
     if (!shop?.id) return

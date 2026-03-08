@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import type { CustomerSession, Shop } from '@/lib/types'
+import { usePosContext } from '@/lib/pos-context'
+import type { CustomerSession } from '@/lib/types'
 import { QRCodeSVG } from 'qrcode.react'
 import { buildOrderUrl } from '@/lib/qr'
 import { ArrowLeft, ChevronRight, Printer, Search, X } from 'lucide-react'
@@ -63,7 +64,7 @@ function fmt(n: number) {
 
 export default function SessionHistoryPage() {
   const supabase = createClient()
-  const [shop, setShop] = useState<Shop | null>(null)
+  const { shop } = usePosContext()
   const [sessions, setSessions] = useState<HistorySession[]>([])
   const [loading, setLoading] = useState(true)
   const [printSession, setPrintSession] = useState<HistorySession | null>(null)
@@ -78,19 +79,6 @@ export default function SessionHistoryPage() {
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paid' | 'cancelled'>('all')
   const [dateError, setDateError] = useState('')
-
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) { setLoading(false); return }
-      const { data: p } = await supabase.from('profiles').select('shop_id').eq('id', user.id).single()
-      if (p?.shop_id) {
-        const { data: s } = await supabase.from('shops').select('*').eq('id', p.shop_id).single()
-        setShop(s)
-      } else {
-        setLoading(false)
-      }
-    })
-  }, [])
 
   const fetchHistory = useCallback(async () => {
     if (!shop?.id) return

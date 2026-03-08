@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import type { Category, Product, Shop } from '@/lib/types'
+import { usePosContext } from '@/lib/pos-context'
+import type { Category, Product } from '@/lib/types'
 import Image from 'next/image'
 
 interface ProductFormData {
@@ -77,7 +78,7 @@ function validateProductForm(form: ProductFormData): string | null {
 
 export default function ProductsPage() {
   const supabase = createClient()
-  const [shop, setShop] = useState<Shop | null>(null)
+  const { profile, shop } = usePosContext()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -88,19 +89,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState<ProductFormData>(DEFAULT_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [isOwner, setIsOwner] = useState(false)
-
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      const { data: p } = await supabase.from('profiles').select('role, shop_id').eq('id', user.id).single()
-      setIsOwner(p?.role === 'owner' || p?.role === 'super_admin')
-      if (p?.shop_id) {
-        const { data: s } = await supabase.from('shops').select('*').eq('id', p.shop_id).single()
-        setShop(s)
-      }
-    })
-  }, [])
+  const isOwner = profile?.role === 'owner' || profile?.role === 'super_admin'
 
   const fetchData = useCallback(async () => {
     if (!shop?.id) return

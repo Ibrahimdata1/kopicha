@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import type { PendingUser, Profile, Shop, TeamMember } from '@/lib/types'
+import { usePosContext } from '@/lib/pos-context'
+import type { PendingUser, TeamMember } from '@/lib/types'
 import { useConfirm } from '@/components/ConfirmDialog'
 import {
   Check,
@@ -19,15 +20,14 @@ import {
 export default function SettingsPage() {
   const supabase = createClient()
   const { confirm, ConfirmDialogUI } = useConfirm()
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [shop, setShop] = useState<Shop | null>(null)
+  const { profile, shop } = usePosContext()
   const [team, setTeam] = useState<TeamMember[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [shopName, setShopName] = useState('')
-  const [promptpay, setPromptpay] = useState('')
-  const [tableCount, setTableCount] = useState('')
+  const [shopName, setShopName] = useState(shop?.name ?? '')
+  const [promptpay, setPromptpay] = useState(shop?.promptpay_id ?? '')
+  const [tableCount, setTableCount] = useState(shop?.table_count != null ? String(shop.table_count) : '')
   const [isSavingShop, setIsSavingShop] = useState(false)
   const [shopSaved, setShopSaved] = useState(false)
 
@@ -43,33 +43,24 @@ export default function SettingsPage() {
   const isOwner = profile?.role === 'owner'
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      setProfile(p)
-
-      if (p?.shop_id) {
-        const { data: s } = await supabase.from('shops').select('*').eq('id', p.shop_id).single()
-        setShop(s)
-        setShopName(s?.name ?? '')
-        setPromptpay(s?.promptpay_id ?? '')
-        setTableCount(s?.table_count != null ? String(s.table_count) : '')
-
+    const load = async () => {
+      if (profile?.shop_id) {
         const { data: teamData } = await supabase
           .from('profiles')
           .select('id, email, full_name, role, avatar_url')
-          .eq('shop_id', p.shop_id)
+          .eq('shop_id', profile.shop_id)
           .order('created_at')
         setTeam((teamData ?? []) as TeamMember[])
       }
 
-      if (p?.role === 'super_admin') {
+      if (profile?.role === 'super_admin') {
         const { data: pending } = await supabase.rpc('get_pending_users')
         setPendingUsers((pending ?? []) as PendingUser[])
       }
 
       setLoading(false)
-    })
+    }
+    load()
   }, [])
 
   const handleSaveShop = async (e: React.FormEvent) => {

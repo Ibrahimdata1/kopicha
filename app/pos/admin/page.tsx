@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { usePosContext } from '@/lib/pos-context'
 import {
   AlertCircle,
   Building2,
@@ -33,7 +33,7 @@ interface ShopRow {
 
 export default function AdminPage() {
   const supabase = createClient()
-  const router = useRouter()
+  const { profile } = usePosContext()
   const [shops, setShops] = useState<ShopRow[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,12 +43,8 @@ export default function AdminPage() {
   const { confirm, ConfirmDialogUI } = useConfirm()
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) { router.push('/login'); return }
-      const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (p?.role !== 'super_admin') { router.push('/pos/sessions'); return }
-      await loadData()
-    })
+    if (profile?.role !== 'super_admin') return
+    loadData()
   }, [])
 
   const loadData = async () => {

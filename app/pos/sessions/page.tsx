@@ -1,17 +1,12 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase-server'
+'use client'
+
+import { usePosContext } from '@/lib/pos-context'
 import SessionsView from '@/components/SessionsView'
 
-export default async function SessionsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+export default function SessionsPage() {
+  const { profile, shop } = usePosContext()
 
-  const [{ data: profile }, ] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-  ])
-
-  if (!profile?.shop_id) {
+  if (!shop) {
     const isSuperAdmin = profile?.role === 'super_admin'
     return (
       <div className="flex items-center justify-center h-64">
@@ -29,9 +24,6 @@ export default async function SessionsPage() {
       </div>
     )
   }
-
-  const { data: shop } = await supabase.from('shops').select('*').eq('id', profile.shop_id).single()
-  if (!shop) redirect('/pos/settings')
 
   return <SessionsView shop={shop} profile={profile} />
 }
