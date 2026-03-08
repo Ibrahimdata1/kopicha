@@ -27,6 +27,7 @@ export default function SettingsPage() {
 
   const [shopName, setShopName] = useState('')
   const [promptpay, setPromptpay] = useState('')
+  const [tableCount, setTableCount] = useState('')
   const [isSavingShop, setIsSavingShop] = useState(false)
   const [shopSaved, setShopSaved] = useState(false)
 
@@ -52,6 +53,7 @@ export default function SettingsPage() {
         setShop(s)
         setShopName(s?.name ?? '')
         setPromptpay(s?.promptpay_id ?? '')
+        setTableCount(s?.table_count != null ? String(s.table_count) : '')
 
         const { data: teamData } = await supabase
           .from('profiles')
@@ -83,12 +85,17 @@ export default function SettingsPage() {
       setError('PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขนิติบุคคล 13 หลัก')
       return
     }
+    const tc = tableCount.trim() ? parseInt(tableCount.trim(), 10) : 0
+    if (isNaN(tc) || tc < 0 || tc > 200) {
+      setError('จำนวนโต๊ะต้องเป็นตัวเลข 0-200')
+      return
+    }
     setIsSavingShop(true)
     setError('')
     try {
       const { error: updateErr } = await supabase
         .from('shops')
-        .update({ name, promptpay_id: pp })
+        .update({ name, promptpay_id: pp, table_count: tc })
         .eq('id', shop.id)
       if (updateErr) throw updateErr
       setShopSaved(true)
@@ -208,6 +215,19 @@ export default function SettingsPage() {
                 onChange={(e) => setPromptpay(e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">จำนวนโต๊ะ</label>
+              <input
+                type="number"
+                min="0"
+                max="200"
+                value={tableCount}
+                onChange={(e) => setTableCount(e.target.value)}
+                placeholder="0 = กรอกเอง"
+                className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
+              />
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">ตั้งจำนวนโต๊ะเพื่อให้เลือกเลขโต๊ะจากปุ่ม ถ้าเป็น 0 จะกรอกเลขโต๊ะเอง</p>
             </div>
             <button
               type="submit"
