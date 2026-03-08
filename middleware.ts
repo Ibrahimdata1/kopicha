@@ -23,11 +23,12 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Use getSession() for fast cookie-based check (no Supabase API call)
+  // Layout's getUser() does the secure server-side verification
+  const { data: { session } } = await supabase.auth.getSession()
 
   const { pathname } = request.nextUrl
 
-  // Public routes: /order (customer), /login, /register, /pending
   const isPublic =
     pathname.startsWith('/order') ||
     pathname.startsWith('/login') ||
@@ -35,7 +36,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/pending') ||
     pathname === '/'
 
-  if (!isPublic && !user) {
+  if (!isPublic && !session) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
