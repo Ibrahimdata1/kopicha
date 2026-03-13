@@ -206,8 +206,11 @@ export default function OrdersView({ shop, profile }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className={statusInfo.badge}>{statusInfo.label}</span>
+                    {bill.table_label && (
+                      <span className="text-xs font-bold text-primary-600 dark:text-primary-400">โต๊ะ {bill.table_label}</span>
+                    )}
                   </div>
-                  <p className="text-xs text-subtle font-mono">{bill.id.slice(0, 12)}... · {timeAgo(bill.created_at)}</p>
+                  <p className="text-xs text-subtle font-mono">{bill.id.slice(0, 8)}... · {timeAgo(bill.created_at)}</p>
                 </div>
                 <span className="text-xs text-muted shrink-0">
                   {bill.item_count > 0 ? `${bill.item_count} รายการ` : '—'}
