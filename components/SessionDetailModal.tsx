@@ -36,6 +36,7 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
   const [error, setError] = useState('')
   const [showChangeTable, setShowChangeTable] = useState(false)
   const [newTableLabel, setNewTableLabel] = useState('')
+  const [paidSuccess, setPaidSuccess] = useState(false)
 
   const supabase = createClient()
   const { confirm, ConfirmDialogUI } = useConfirm()
@@ -157,6 +158,7 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
 
       setShowCash(false)
       setCashInput('')
+      setPaidSuccess(true)
       onRefresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
@@ -549,6 +551,28 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
                 {processing ? <span className="spinner-sm" /> : 'ยืนยัน'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment success overlay */}
+      {paidSuccess && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xs p-8 text-center animate-slide-up">
+            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 size={40} className="text-emerald-500" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">ชำระเงินสำเร็จ</h3>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-1">{fmt(session.total_amount)}</p>
+            {session.table_label && (
+              <p className="text-sm text-muted">โต๊ะ {session.table_label}</p>
+            )}
+            <button
+              onClick={() => { setPaidSuccess(false); onClose() }}
+              className="mt-6 w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition"
+            >
+              ตกลง
+            </button>
           </div>
         </div>
       )}
