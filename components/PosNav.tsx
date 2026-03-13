@@ -50,14 +50,14 @@ export default function PosNav({ profile }: Props) {
           {/* Left: Logo + Nav */}
           <div className="flex items-center gap-0.5">
             {/* Logo */}
-            <div className="flex items-center gap-2 mr-4 select-none">
+            <Link href="/pos/sessions" className="flex items-center gap-2 mr-4 select-none">
               <div className="w-7 h-7 bg-primary-500 rounded-lg flex items-center justify-center shadow-sm shadow-primary-500/30">
                 <Coffee size={14} strokeWidth={2.5} className="text-white" />
               </div>
               <span className="font-bold text-sm hidden sm:block tracking-tight text-gray-900 dark:text-slate-100">
                 Kopicha
               </span>
-            </div>
+            </Link>
 
             {/* Nav items */}
             {NAV_ITEMS.map(({ href, label, Icon }) => {
