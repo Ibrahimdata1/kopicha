@@ -3,13 +3,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Receipt, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
-import type { Shop } from '@/lib/types'
+import { buildOrderUrl } from '@/lib/qr'
+import type { OrderWithItems, Profile, Shop } from '@/lib/types'
+import SessionDetailModal from '@/components/SessionDetailModal'
+import type { SessionWithOrders } from '@/components/SessionsView'
 
 interface Bill {
   id: string
   status: 'active' | 'paid' | 'cancelled'
+  table_label: string | null
   created_at: string
   paid_at?: string | null
+  cancelled_at?: string | null
+  created_by?: string | null
+  shop_id: string
   item_count: number
   total_amount: number
 }
@@ -43,20 +50,23 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 interface Props {
   shop: Shop
+  profile: Profile
 }
 
-export default function OrdersView({ shop }: Props) {
+export default function OrdersView({ shop, profile }: Props) {
   const supabase = createClient()
   const [bills, setBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [selectedBill, setSelectedBill] = useState<SessionWithOrders | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
 
   const fetchBills = useCallback(async () => {
     setLoading(true)
     try {
       let query = supabase
         .from('customer_sessions')
-        .select('id, status, created_at, paid_at')
+        .select('id, shop_id, status, table_label, created_at, paid_at, cancelled_at, created_by')
         .eq('shop_id', shop.id)
         .order('created_at', { ascending: false })
         .limit(200)
@@ -90,9 +100,13 @@ export default function OrdersView({ shop }: Props) {
         )
         return {
           id: s.id,
+          shop_id: s.shop_id,
           status: s.status as Bill['status'],
+          table_label: s.table_label,
           created_at: s.created_at,
           paid_at: s.paid_at,
+          cancelled_at: s.cancelled_at,
+          created_by: s.created_by,
           item_count: sItems.length,
           total_amount: total,
         }
@@ -105,6 +119,38 @@ export default function OrdersView({ shop }: Props) {
   }, [shop.id, filter])
 
   useEffect(() => { fetchBills() }, [fetchBills])
+
+  const handleBillClick = async (bill: Bill) => {
+    setLoadingDetail(true)
+    try {
+      const { data: rawOrders } = await supabase
+        .from('orders')
+        .select('*, items:order_items(id, quantity, unit_price, subtotal, item_status, product:products(name)), payment:payments(*)')
+        .eq('customer_session_id', bill.id)
+        .not('status', 'eq', 'cancelled')
+
+      const orders: OrderWithItems[] = (rawOrders ?? []).map((o: OrderWithItems & { payment: unknown }) => {
+        const rawPay = Array.isArray(o.payment) ? (o.payment as unknown[])[0] : o.payment
+        return { ...o, payment: rawPay ?? undefined } as OrderWithItems
+      })
+
+      const sessionData: SessionWithOrders = {
+        id: bill.id,
+        shop_id: bill.shop_id,
+        table_label: bill.table_label,
+        status: bill.status,
+        created_by: bill.created_by ?? null,
+        created_at: bill.created_at,
+        paid_at: bill.paid_at ?? null,
+        cancelled_at: bill.cancelled_at ?? null,
+        orders,
+        total_amount: bill.total_amount,
+      }
+      setSelectedBill(sessionData)
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
 
   const counts = {
     all: bills.length,
@@ -155,7 +201,7 @@ export default function OrdersView({ shop }: Props) {
           {bills.map((bill) => {
             const statusInfo = BILL_STATUS[bill.status]
             return (
-              <div key={bill.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
+              <button key={bill.id} onClick={() => handleBillClick(bill)} disabled={loadingDetail} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors w-full text-left cursor-pointer">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${statusInfo.dot}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
@@ -173,10 +219,21 @@ export default function OrdersView({ shop }: Props) {
                 }`}>
                   {fmt(bill.total_amount)}
                 </p>
-              </div>
+              </button>
             )
           })}
         </div>
+      )}
+
+      {selectedBill && (
+        <SessionDetailModal
+          session={selectedBill}
+          shop={shop}
+          profile={profile}
+          orderUrl={buildOrderUrl(selectedBill.id)}
+          onClose={() => setSelectedBill(null)}
+          onRefresh={() => { setSelectedBill(null); fetchBills() }}
+        />
       )}
     </div>
   )

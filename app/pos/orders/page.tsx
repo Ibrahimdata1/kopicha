@@ -4,7 +4,7 @@ import { usePosContext } from '@/lib/pos-context'
 import OrdersView from '@/components/OrdersView'
 
 export default function OrdersPage() {
-  const { shop } = usePosContext()
+  const { shop, profile } = usePosContext()
 
   if (!shop) {
     return (
@@ -14,5 +14,5 @@ export default function OrdersPage() {
     )
   }
 
-  return <OrdersView shop={shop} />
+  return <OrdersView shop={shop} profile={profile} />
 }
