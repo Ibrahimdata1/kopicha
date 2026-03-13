@@ -1,12 +1,14 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Receipt } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import type { CustomerSession, OrderWithItems, Profile, Shop } from '@/lib/types'
-import GenerateSessionModal from '@/components/GenerateSessionModal'
-import SessionDetailModal from '@/components/SessionDetailModal'
 import { buildOrderUrl } from '@/lib/qr'
+
+const GenerateSessionModal = dynamic(() => import('@/components/GenerateSessionModal'), { ssr: false })
+const SessionDetailModal = dynamic(() => import('@/components/SessionDetailModal'), { ssr: false })
 
 export type SessionWithOrders = CustomerSession & {
   orders: OrderWithItems[]

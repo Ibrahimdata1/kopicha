@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
-import { BarChart3, QrCode, Receipt, TrendingUp } from 'lucide-react'
+import { BarChart3, Grid3X3, Receipt, TrendingUp } from 'lucide-react'
 
 interface Stats {
   totalSales: number
@@ -134,9 +134,9 @@ export default function DashboardPage() {
       valueColor: 'text-blue-700 dark:text-blue-300',
     },
     {
-      label: 'QR Sessions',
+      label: 'โต๊ะที่เปิด',
       value: stats.sessionCount.toString(),
-      Icon: QrCode,
+      Icon: Grid3X3,
       bg: 'bg-primary-50 dark:bg-primary-900/20',
       iconBg: 'bg-primary-100 dark:bg-primary-900/40',
       iconColor: 'text-primary-600 dark:text-primary-400',

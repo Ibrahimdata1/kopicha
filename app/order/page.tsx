@@ -5,11 +5,13 @@
 // QR URL: /order?session=<customer_session_uuid>
 // No auth required — uses anon Supabase client with RLS
 
+import dynamic from 'next/dynamic'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { QRCodeSVG } from 'qrcode.react'
 import { generatePromptPayPayload, generateQRReference } from '@/lib/qr'
+
+const QRCodeSVG = dynamic(() => import('qrcode.react').then((m) => ({ default: m.QRCodeSVG })), { ssr: false })
 import type { CustomerSession, Product, OrderWithItems, Payment } from '@/lib/types'
 import Image from 'next/image'
 import {

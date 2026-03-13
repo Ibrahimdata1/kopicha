@@ -18,6 +18,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="th" className={inter.variable} suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://nooljfpynicvckfbsaba.supabase.co" />
+        <link rel="dns-prefetch" href="https://nooljfpynicvckfbsaba.supabase.co" />
         {/* Prevent flash of wrong theme */}
         <script
           dangerouslySetInnerHTML={{

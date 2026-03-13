@@ -1,12 +1,14 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useState } from 'react'
 import { Receipt, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import { buildOrderUrl } from '@/lib/qr'
 import type { OrderWithItems, Profile, Shop } from '@/lib/types'
-import SessionDetailModal from '@/components/SessionDetailModal'
 import type { SessionWithOrders } from '@/components/SessionsView'
+
+const SessionDetailModal = dynamic(() => import('@/components/SessionDetailModal'), { ssr: false })
 
 interface Bill {
   id: string

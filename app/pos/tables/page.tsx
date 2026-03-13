@@ -1,17 +1,17 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
 import { buildOrderUrl } from '@/lib/qr'
 import type { OrderWithItems, CustomerSession } from '@/lib/types'
-import SessionDetailModal from '@/components/SessionDetailModal'
 import type { SessionWithOrders } from '@/components/SessionsView'
-import GenerateSessionModal from '@/components/GenerateSessionModal'
+
+const SessionDetailModal = dynamic(() => import('@/components/SessionDetailModal'), { ssr: false })
 import {
   ArrowRightLeft,
   Grid3X3,
-  Plus,
   Users,
   X,
 } from 'lucide-react'
@@ -42,9 +42,8 @@ export default function TablesPage() {
   const [movingFrom, setMovingFrom] = useState<string | null>(null)
   const [isMoving, setIsMoving] = useState(false)
   const [selectedSession, setSelectedSession] = useState<SessionWithOrders | null>(null)
-  const [showGenerate, setShowGenerate] = useState(false)
-  const [generateForTable, setGenerateForTable] = useState<string | null>(null)
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null)
+  const [creatingTable, setCreatingTable] = useState<string | null>(null)
   const [toast, setToast] = useState('')
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
@@ -154,9 +153,34 @@ export default function TablesPage() {
     if (table.session) {
       setSelectedSession(table.session)
     } else {
-      // Open new session for this table
-      setGenerateForTable(table.key)
-      setShowGenerate(true)
+      // Create session directly for this table
+      handleCreateSession(table.key)
+    }
+  }
+
+  const handleCreateSession = async (tableKey: string) => {
+    if (!shop?.id || creatingTable) return
+    setCreatingTable(tableKey)
+    try {
+      const { data, error } = await supabase
+        .from('customer_sessions')
+        .insert({
+          shop_id: shop.id,
+          table_label: tableKey,
+          status: 'active',
+          created_by: profile?.id ?? null,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      setPendingSessionId(data.id)
+      await fetchTables()
+    } catch (err: unknown) {
+      setToast(err instanceof Error ? err.message : 'สร้างบิลไม่ได้')
+      setTimeout(() => setToast(''), 2500)
+    } finally {
+      setCreatingTable(null)
     }
   }
 
@@ -280,7 +304,7 @@ export default function TablesPage() {
             <button
               key={table.key}
               onClick={() => handleTableClick(table)}
-              disabled={isMoving}
+              disabled={isMoving || creatingTable === table.key}
               className={`
                 relative rounded-2xl border-2 p-4 text-left transition-all duration-200 min-h-[120px] flex flex-col justify-between
                 ${isSource
@@ -334,6 +358,11 @@ export default function TablesPage() {
                   <ArrowRightLeft size={13} className="text-emerald-500" />
                   <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">ย้ายมาที่นี่</span>
                 </div>
+              ) : creatingTable === table.key ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-primary-500 font-medium">กำลังสร้าง...</span>
+                </div>
               ) : (
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -358,22 +387,6 @@ export default function TablesPage() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-lg text-sm font-medium animate-fade-in">
           {toast}
         </div>
-      )}
-
-      {/* Generate session modal */}
-      {showGenerate && shop && profile && (
-        <GenerateSessionModal
-          shop={shop}
-          profile={profile}
-          defaultTable={generateForTable ?? undefined}
-          onClose={() => { setShowGenerate(false); setGenerateForTable(null) }}
-          onCreated={(session) => {
-            setShowGenerate(false)
-            setGenerateForTable(null)
-            setPendingSessionId(session.id)
-            fetchTables()
-          }}
-        />
       )}
 
       {/* Session detail modal */}
