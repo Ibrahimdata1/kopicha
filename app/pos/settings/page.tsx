@@ -22,7 +22,7 @@ import {
 export default function SettingsPage() {
   const supabase = createClient()
   const { confirm, ConfirmDialogUI } = useConfirm()
-  const { profile, shop } = usePosContext()
+  const { profile, shop, refreshShop } = usePosContext()
   const [team, setTeam] = useState<TeamMember[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -92,6 +92,7 @@ export default function SettingsPage() {
         .update({ name, promptpay_id: pp, table_count: tc, payment_mode: paymentMode })
         .eq('id', shop.id)
       if (updateErr) throw updateErr
+      await refreshShop()
       setShopSaved(true)
       setTimeout(() => setShopSaved(false), 2000)
     } catch (err: unknown) {
