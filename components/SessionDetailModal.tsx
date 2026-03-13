@@ -36,7 +36,7 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
   const [error, setError] = useState('')
   const [showChangeTable, setShowChangeTable] = useState(false)
   const [newTableLabel, setNewTableLabel] = useState('')
-  const [paidSuccess, setPaidSuccess] = useState(false)
+  const [paidSuccess, setPaidSuccess] = useState<{ method: string; staffName: string } | null>(null)
 
   const supabase = createClient()
   const { confirm, ConfirmDialogUI } = useConfirm()
@@ -124,6 +124,8 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
   }
 
   // Mark ALL orders in session as completed + session as paid
+  const staffName = profile?.full_name ?? profile?.email ?? 'พนักงาน'
+
   const markSessionPaid = async (method: 'transfer' | 'cash', cashData?: { received: number; change: number }) => {
     setProcessing(true)
     setError('')
@@ -158,7 +160,7 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
 
       setShowCash(false)
       setCashInput('')
-      setPaidSuccess(true)
+      setPaidSuccess({ method: method === 'cash' ? 'เงินสด' : 'โอนเงิน', staffName })
       onRefresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
@@ -564,11 +566,16 @@ export default function SessionDetailModal({ session, shop, profile, orderUrl, o
             </div>
             <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">ชำระเงินสำเร็จ</h3>
             <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-1">{fmt(session.total_amount)}</p>
-            {session.table_label && (
-              <p className="text-sm text-muted">โต๊ะ {session.table_label}</p>
-            )}
+            <div className="mt-2 space-y-1">
+              {session.table_label && (
+                <p className="text-sm text-muted">โต๊ะ {session.table_label}</p>
+              )}
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {paidSuccess.method} · รับโดย <span className="font-semibold text-slate-800 dark:text-slate-200">{paidSuccess.staffName}</span>
+              </p>
+            </div>
             <button
-              onClick={() => { setPaidSuccess(false); onClose() }}
+              onClick={() => { setPaidSuccess(null); onClose() }}
               className="mt-6 w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition"
             >
               ตกลง
