@@ -32,6 +32,7 @@ const config: Config = {
         'spin-slow': 'spin 1.5s linear infinite',
         'fade-in': 'fadeIn 0.25s ease-out',
         'slide-up': 'slideUp 0.3s ease-out',
+        'pulse-subtle': 'pulseSubtle 2s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -41,6 +42,10 @@ const config: Config = {
         slideUp: {
           '0%': { opacity: '0', transform: 'translateY(12px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        pulseSubtle: {
+          '0%, 100%': { borderColor: 'rgb(52, 211, 153)' },
+          '50%': { borderColor: 'rgb(16, 185, 129)', boxShadow: '0 0 12px rgba(16, 185, 129, 0.2)' },
         },
       },
       boxShadow: {

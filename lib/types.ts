@@ -4,6 +4,7 @@ export interface Shop {
   promptpay_id: string
   tax_rate: number
   table_count: number
+  payment_mode: 'auto' | 'counter'
   address?: string
   phone?: string
   logo_url?: string

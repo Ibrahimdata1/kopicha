@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart3,
   Coffee,
+  Grid3X3,
   LogOut,
   Moon,
   Package,
@@ -23,6 +24,7 @@ interface Props {
 
 const NAV_ITEMS = [
   { href: '/pos/sessions', label: 'QR Sessions', Icon: QrCode },
+  { href: '/pos/tables', label: 'โต๊ะ', Icon: Grid3X3 },
   { href: '/pos/orders', label: 'บิล', Icon: Receipt },
   { href: '/pos/products', label: 'สินค้า', Icon: Package },
   { href: '/pos/dashboard', label: 'สรุป', Icon: BarChart3 },

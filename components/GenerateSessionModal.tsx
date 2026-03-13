@@ -8,14 +8,15 @@ import type { CustomerSession, Profile, Shop } from '@/lib/types'
 interface Props {
   shop: Shop
   profile: Profile | null
+  defaultTable?: string
   onClose: () => void
   onCreated: (session: CustomerSession) => void
 }
 
-export default function GenerateSessionModal({ shop, profile, onClose, onCreated }: Props) {
+export default function GenerateSessionModal({ shop, profile, defaultTable, onClose, onCreated }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [tableLabel, setTableLabel] = useState('')
+  const [tableLabel, setTableLabel] = useState(defaultTable ?? '')
 
   const tableCount = shop.table_count ?? 0
 

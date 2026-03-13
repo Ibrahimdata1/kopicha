@@ -107,6 +107,7 @@ function OrderPageContent() {
   const [shopName, setShopName] = useState('')
   const [promptpayId, setPromptpayId] = useState('')
   const [taxRate, setTaxRate] = useState(0.07)
+  const [paymentMode, setPaymentMode] = useState<'auto' | 'counter'>('counter')
   const [session, setSession] = useState<CustomerSession | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; sort_order: number }[]>([])
@@ -188,7 +189,7 @@ function OrderPageContent() {
 
         const { data: shop } = await supabase
           .from('shops')
-          .select('name, promptpay_id, tax_rate')
+          .select('name, promptpay_id, tax_rate, payment_mode')
           .eq('id', sess.shop_id)
           .single()
 
@@ -196,6 +197,7 @@ function OrderPageContent() {
         setShopName(shop.name)
         setPromptpayId(shop.promptpay_id ?? '')
         setTaxRate(shop.tax_rate ?? 0.07)
+        setPaymentMode((shop.payment_mode as 'auto' | 'counter') ?? 'counter')
 
         const [{ data: cats }, { data: prods }] = await Promise.all([
           supabase.from('categories').select('*').eq('shop_id', sess.shop_id).order('sort_order'),
@@ -663,13 +665,20 @@ function OrderPageContent() {
             </div>
 
             {unpaidOrders.length > 0 && (
-              <button
-                onClick={handleShowPayment}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition shadow-md shadow-primary-500/25"
-              >
-                <CreditCard size={16} />
-                ชำระเงิน {fmt(unpaidTotal)}
-              </button>
+              paymentMode === 'auto' ? (
+                <button
+                  onClick={handleShowPayment}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition shadow-md shadow-primary-500/25"
+                >
+                  <CreditCard size={16} />
+                  ชำระเงิน {fmt(unpaidTotal)}
+                </button>
+              ) : (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-center">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">ยอดรวม {fmt(unpaidTotal)}</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">กรุณาชำระเงินที่เคาน์เตอร์</p>
+                </div>
+              )
             )}
           </div>
         )}
@@ -870,7 +879,9 @@ function OrderPageContent() {
                   <><ChefHat size={18} /> สั่งอาหาร {fmt(cartTotal)}</>
                 )}
               </button>
-              <p className="text-center text-xs text-gray-400 mt-2">ออเดอร์จะส่งไปยังครัวทันที — ชำระเงินได้ทีหลัง</p>
+              <p className="text-center text-xs text-gray-400 mt-2">
+                ออเดอร์จะส่งไปยังครัวทันที — {paymentMode === 'counter' ? 'ชำระเงินที่เคาน์เตอร์' : 'ชำระเงินได้ทีหลัง'}
+              </p>
             </div>
           </div>
         </div>
