@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
-import { BarChart3, Grid3X3, Receipt, TrendingUp } from 'lucide-react'
+import { Banknote, BarChart3, Receipt, TrendingUp } from 'lucide-react'
 
 interface Stats {
   totalSales: number
   orderCount: number
-  sessionCount: number
+  cashTotal: number
+  transferTotal: number
   avgPerOrder: number
 }
 
@@ -26,7 +27,7 @@ function fmt(n: number) {
 export default function DashboardPage() {
   const supabase = createClient()
   const { shop } = usePosContext()
-  const [stats, setStats] = useState<Stats>({ totalSales: 0, orderCount: 0, sessionCount: 0, avgPerOrder: 0 })
+  const [stats, setStats] = useState<Stats>({ totalSales: 0, orderCount: 0, cashTotal: 0, transferTotal: 0, avgPerOrder: 0 })
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('today')
@@ -50,25 +51,34 @@ export default function DashboardPage() {
       // End of today (start of tomorrow)
       const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
 
-      const [{ data: orders }, { data: sessions }] = await Promise.all([
-        supabase.from('orders')
-          .select('id, total_amount')
-          .eq('shop_id', shop.id)
-          .eq('status', 'completed')
-          .gte('completed_at', startDate.toISOString())
-          .lt('completed_at', endDate.toISOString()),
-        supabase.from('customer_sessions')
-          .select('id')
-          .eq('shop_id', shop.id)
-          .gte('created_at', startDate.toISOString()),
-      ])
+      const { data: orders } = await supabase.from('orders')
+        .select('id, total_amount')
+        .eq('shop_id', shop.id)
+        .eq('status', 'completed')
+        .gte('completed_at', startDate.toISOString())
+        .lt('completed_at', endDate.toISOString())
 
       const orderCount = orders?.length ?? 0
       const totalSales = Math.round((orders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0) * 100) / 100
       const avgPerOrder = orderCount > 0 ? Math.round((totalSales / orderCount) * 100) / 100 : 0
-      const sessionCount = sessions?.length ?? 0
 
-      setStats({ totalSales, orderCount, sessionCount, avgPerOrder })
+      // Fetch payment breakdown (cash vs transfer)
+      let cashTotal = 0
+      let transferTotal = 0
+      if (orderCount > 0 && orders) {
+        const orderIds = orders.map((o) => o.id)
+        const { data: payments } = await supabase.from('payments')
+          .select('method, amount')
+          .in('order_id', orderIds)
+          .eq('status', 'success')
+
+        for (const p of payments ?? []) {
+          if (p.method === 'cash') cashTotal += Number(p.amount ?? 0)
+          else transferTotal += Number(p.amount ?? 0)
+        }
+      }
+
+      setStats({ totalSales, orderCount, cashTotal: Math.round(cashTotal * 100) / 100, transferTotal: Math.round(transferTotal * 100) / 100, avgPerOrder })
 
       if (orderCount > 0 && orders) {
         const orderIds = orders.map((o) => o.id)
@@ -114,7 +124,7 @@ export default function DashboardPage() {
 
   useEffect(() => { if (shop?.id) fetchStats() }, [shop?.id, fetchStats])
 
-  const STAT_CARDS = [
+  const STAT_CARDS: { label: string; value: string; Icon: typeof TrendingUp; bg: string; iconBg: string; iconColor: string; valueColor: string; small?: boolean }[] = [
     {
       label: 'ยอดขายรวม',
       value: fmt(stats.totalSales),
@@ -134,13 +144,14 @@ export default function DashboardPage() {
       valueColor: 'text-blue-700 dark:text-blue-300',
     },
     {
-      label: 'โต๊ะที่เปิด',
-      value: stats.sessionCount.toString(),
-      Icon: Grid3X3,
+      label: 'เงินสด / โอน',
+      value: `${fmt(stats.cashTotal)} / ${fmt(stats.transferTotal)}`,
+      Icon: Banknote,
       bg: 'bg-primary-50 dark:bg-primary-900/20',
       iconBg: 'bg-primary-100 dark:bg-primary-900/40',
       iconColor: 'text-primary-600 dark:text-primary-400',
       valueColor: 'text-primary-700 dark:text-primary-300',
+      small: true,
     },
     {
       label: 'เฉลี่ย/ออเดอร์',
@@ -188,12 +199,12 @@ export default function DashboardPage() {
         <>
           {/* Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            {STAT_CARDS.map(({ label, value, Icon, bg, iconBg, iconColor, valueColor }) => (
+            {STAT_CARDS.map(({ label, value, Icon, bg, iconBg, iconColor, valueColor, small }) => (
               <div key={label} className={`${bg} rounded-2xl p-4 border border-transparent animate-fade-in`}>
                 <div className={`w-9 h-9 ${iconBg} rounded-xl flex items-center justify-center mb-3`}>
                   <Icon size={17} className={iconColor} />
                 </div>
-                <p className={`text-2xl font-bold tracking-tight ${valueColor} mb-0.5`}>{value}</p>
+                <p className={`${small ? 'text-lg' : 'text-2xl'} font-bold tracking-tight ${valueColor} mb-0.5`}>{value}</p>
                 <p className="text-xs font-medium text-gray-500 dark:text-slate-400">{label}</p>
               </div>
             ))}
