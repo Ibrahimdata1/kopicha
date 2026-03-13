@@ -44,6 +44,7 @@ export default function TablesPage() {
   const [selectedSession, setSelectedSession] = useState<SessionWithOrders | null>(null)
   const [showGenerate, setShowGenerate] = useState(false)
   const [generateForTable, setGenerateForTable] = useState<string | null>(null)
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null)
   const [toast, setToast] = useState('')
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
@@ -118,11 +119,18 @@ export default function TablesPage() {
     return () => { channelRef.current?.unsubscribe() }
   }, [shop?.id, fetchTables])
 
-  // Update selected session when data changes
+  // Update selected session when data changes + auto-open newly created session
   useEffect(() => {
     if (selectedSession) {
       const table = tables.find((t) => t.session?.id === selectedSession.id)
       if (table?.session) setSelectedSession(table.session)
+    }
+    if (pendingSessionId) {
+      const table = tables.find((t) => t.session?.id === pendingSessionId)
+      if (table?.session) {
+        setSelectedSession(table.session)
+        setPendingSessionId(null)
+      }
     }
   }, [tables])
 
@@ -359,9 +367,10 @@ export default function TablesPage() {
           profile={profile}
           defaultTable={generateForTable ?? undefined}
           onClose={() => { setShowGenerate(false); setGenerateForTable(null) }}
-          onCreated={() => {
+          onCreated={(session) => {
             setShowGenerate(false)
             setGenerateForTable(null)
+            setPendingSessionId(session.id)
             fetchTables()
           }}
         />
