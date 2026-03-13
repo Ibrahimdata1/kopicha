@@ -9,7 +9,6 @@ import {
   LogOut,
   Moon,
   Package,
-  QrCode,
   Receipt,
   Settings,
   Shield,
@@ -23,7 +22,6 @@ interface Props {
 }
 
 const NAV_ITEMS = [
-  { href: '/pos/sessions', label: 'QR Sessions', Icon: QrCode },
   { href: '/pos/tables', label: 'โต๊ะ', Icon: Grid3X3 },
   { href: '/pos/orders', label: 'บิล', Icon: Receipt },
   { href: '/pos/products', label: 'สินค้า', Icon: Package },
@@ -50,7 +48,7 @@ export default function PosNav({ profile }: Props) {
           {/* Left: Logo + Nav */}
           <div className="flex items-center gap-0.5">
             {/* Logo */}
-            <Link href="/pos/sessions" className="flex items-center gap-2 mr-4 select-none">
+            <Link href="/pos/tables" className="flex items-center gap-2 mr-4 select-none">
               <div className="w-7 h-7 bg-primary-500 rounded-lg flex items-center justify-center shadow-sm shadow-primary-500/30">
                 <Coffee size={14} strokeWidth={2.5} className="text-white" />
               </div>
