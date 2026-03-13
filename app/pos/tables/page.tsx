@@ -7,6 +7,7 @@ import { usePosContext } from '@/lib/pos-context'
 import { buildOrderUrl } from '@/lib/qr'
 import type { OrderWithItems, CustomerSession } from '@/lib/types'
 import type { SessionWithOrders } from '@/components/SessionsView'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 const SessionDetailModal = dynamic(() => import('@/components/SessionDetailModal'), { ssr: false })
 import {
@@ -37,6 +38,7 @@ function timeAgo(iso: string) {
 export default function TablesPage() {
   const supabase = createClient()
   const { profile, shop } = usePosContext()
+  const { confirm, ConfirmDialogUI } = useConfirm()
   const [tables, setTables] = useState<TableData[]>([])
   const [loading, setLoading] = useState(true)
   const [movingFrom, setMovingFrom] = useState<string | null>(null)
@@ -160,6 +162,12 @@ export default function TablesPage() {
 
   const handleCreateSession = async (tableKey: string) => {
     if (!shop?.id || creatingTable) return
+    const ok = await confirm({
+      title: `เปิดโต๊ะ ${tableKey}`,
+      message: 'สร้างบิลใหม่และ QR Code สำหรับโต๊ะนี้?',
+      confirmLabel: 'เปิดโต๊ะ',
+    })
+    if (!ok) return
     setCreatingTable(tableKey)
     try {
       const { data, error } = await supabase
@@ -381,6 +389,8 @@ export default function TablesPage() {
           )
         })}
       </div>
+
+      {ConfirmDialogUI}
 
       {/* Toast */}
       {toast && (
