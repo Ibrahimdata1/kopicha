@@ -1,20 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { Coffee, Store, User, Mail, Lock, ArrowRight, ArrowLeft, Ticket } from 'lucide-react'
+import { Coffee, Store, User, Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [step, setStep] = useState<'account' | 'shop'>('account')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [shopName, setShopName] = useState('')
   const [promptpay, setPromptpay] = useState('')
-  const [referralCode, setReferralCode] = useState(searchParams.get('ref') ?? '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -62,7 +60,6 @@ export default function RegisterPage() {
       const { data: result, error: rpcError } = await supabase.rpc('self_register_shop', {
         p_shop_name: shopName.trim(),
         p_promptpay: promptpay.trim(),
-        p_referral_code: referralCode.trim() || null,
       })
       if (rpcError) {
         // Fallback to old flow if new RPC doesn't exist yet
@@ -195,25 +192,6 @@ export default function RegisterPage() {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                  <Ticket size={13} className="inline mr-1.5 text-slate-400" />
-                  รหัสตัวแทน <span className="text-muted font-normal">(ถ้ามี)</span>
-                </label>
-                <input
-                  type="text"
-                  value={referralCode}
-                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                  className="input"
-                  placeholder="เช่น AGENT-SOM"
-                />
-                {referralCode.trim() ? (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5">สมัครผ่านตัวแทน — ค่าแรกเข้า ฿999 ชำระให้ตัวแทนแล้ว</p>
-                ) : (
-                  <p className="text-xs text-muted mt-1.5">ไม่มีรหัสตัวแทน? ค่าแรกเข้า ฿999 ชำระผ่านระบบภายหลัง</p>
-                )}
-              </div>
-
               {error && (
                 <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl border border-red-100 dark:border-red-800/40">
                   {error}

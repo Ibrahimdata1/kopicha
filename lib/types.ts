@@ -5,6 +5,9 @@ export interface Shop {
   tax_rate: number
   table_count: number
   payment_mode: 'auto' | 'counter'
+  subscription_paid_until: string | null
+  setup_fee_paid: boolean
+  referral_code: string | null
   address?: string
   phone?: string
   logo_url?: string
@@ -53,6 +56,9 @@ export interface CustomerSession {
   created_at: string
   paid_at: string | null
   cancelled_at: string | null
+  discount_amount: number
+  discount_type: 'percent' | 'fixed' | null
+  discount_note: string | null
 }
 
 export interface Order {

@@ -72,7 +72,7 @@ export default async function RootPage() {
             href="/register"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition shadow-lg shadow-primary-500/25 text-base"
           >
-            สมัครใช้งาน ฿999
+            ทดลองฟรี 7 วัน
             <ArrowRight size={18} />
           </Link>
           <a
