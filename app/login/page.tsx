@@ -75,7 +75,7 @@ export default function LoginPage() {
               <Coffee size={24} strokeWidth={2.5} className="text-white" />
             </div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">
-              Kopicha POS
+              QRforPay
             </h1>
             <p className="text-muted text-sm mt-1">
               เข้าสู่ระบบเพื่อจัดการร้านค้า

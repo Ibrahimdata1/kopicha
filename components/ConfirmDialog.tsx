@@ -24,19 +24,26 @@ export function useConfirm() {
     })
   }, [])
 
-  const handleConfirm = () => {
-    dialog?.resolve(true)
+  const handleConfirm = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const d = dialog
     setDialog(null)
+    // Resolve after dialog is removed to prevent click from reaching elements behind
+    requestAnimationFrame(() => d?.resolve(true))
   }
 
-  const handleCancel = () => {
-    dialog?.resolve(false)
+  const handleCancel = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const d = dialog
     setDialog(null)
+    requestAnimationFrame(() => d?.resolve(false))
   }
 
   const ConfirmDialogUI = dialog ? (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[100] p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-xs p-6 animate-slide-up">
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[100] p-4 animate-fade-in" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-xs p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-col items-center text-center mb-5">
           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${
             dialog.danger

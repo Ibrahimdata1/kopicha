@@ -6,6 +6,7 @@ import { usePosContext } from '@/lib/pos-context'
 import {
   AlertCircle,
   Building2,
+  CalendarPlus,
   Check,
   Clock,
   ShieldAlert,
@@ -21,6 +22,7 @@ interface ShopRow {
   id: string
   name: string
   promptpay_id: string
+  subscription_paid_until: string | null
   created_at: string
   owner?: {
     id: string
@@ -53,7 +55,7 @@ export default function AdminPage() {
       // Load all shops
       const { data: shopsData } = await supabase
         .from('shops')
-        .select('id, name, promptpay_id, created_at')
+        .select('id, name, promptpay_id, subscription_paid_until, created_at')
         .order('created_at', { ascending: false })
 
       // Load all owners
@@ -143,6 +145,37 @@ export default function AdminPage() {
       await supabase.from('shops').delete().eq('id', shopId)
       setShops((prev) => prev.filter((s) => s.id !== shopId))
       setSuccessMsg('ลบร้านเรียบร้อย')
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleExtendSubscription = async (shopId: string, shopName: string) => {
+    const ok = await confirm({ title: `ต่ออายุร้าน "${shopName}" 30 วัน?`, confirmLabel: 'ต่ออายุ' })
+    if (!ok) return
+    setActionLoading(shopId)
+    setError('')
+    try {
+      const shop = shops.find((s) => s.id === shopId)
+      const baseDate = shop?.subscription_paid_until
+        ? new Date(Math.max(new Date(shop.subscription_paid_until).getTime(), Date.now()))
+        : new Date()
+      baseDate.setDate(baseDate.getDate() + 30)
+      const newDate = baseDate.toISOString().slice(0, 10)
+
+      const { error: updateErr } = await supabase
+        .from('shops')
+        .update({ subscription_paid_until: newDate })
+        .eq('id', shopId)
+      if (updateErr) throw updateErr
+
+      setShops((prev) =>
+        prev.map((s) => (s.id === shopId ? { ...s, subscription_paid_until: newDate } : s))
+      )
+      setSuccessMsg(`ต่ออายุร้าน "${shopName}" ถึง ${newDate}`)
       setTimeout(() => setSuccessMsg(''), 3000)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
@@ -281,9 +314,27 @@ export default function AdminPage() {
                     PromptPay: {shop.promptpay_id || '-'} ·{' '}
                     {new Date(shop.created_at).toLocaleDateString('th-TH')}
                   </p>
+                  <p className={`text-xs mt-0.5 ${
+                    !shop.subscription_paid_until || new Date(shop.subscription_paid_until) < new Date()
+                      ? 'text-red-500 dark:text-red-400 font-medium'
+                      : 'text-green-600 dark:text-green-400'
+                  }`}>
+                    สมาชิก: {shop.subscription_paid_until
+                      ? `ถึง ${new Date(shop.subscription_paid_until).toLocaleDateString('th-TH')}`
+                      : 'ยังไม่เปิดใช้'}
+                  </p>
                 </div>
 
                 <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handleExtendSubscription(shop.id, shop.name)}
+                    disabled={actionLoading === shop.id}
+                    className="text-xs px-3 py-1.5 border border-green-200 dark:border-green-700/50 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
+                    title="ต่ออายุ 30 วัน"
+                  >
+                    <CalendarPlus size={13} />
+                    +30 วัน
+                  </button>
                   {shop.owner && (
                     <button
                       onClick={() => handleDeactivateOwner(shop.owner!.id, shop.name)}

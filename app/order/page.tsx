@@ -39,7 +39,7 @@ function fmt(n: number) {
   return '฿' + (n ?? 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-const CART_KEY = (sid: string) => `kopicha_cart_${sid}`
+const CART_KEY = (sid: string) => `qrforpay_cart_${sid}`
 
 function saveCart(sid: string, cart: CartEntry[]) {
   try { localStorage.setItem(CART_KEY(sid), JSON.stringify(cart)) } catch { /* ignore */ }
@@ -233,9 +233,11 @@ function OrderPageContent() {
     })
   }, [])
 
-  // ── Realtime: order status + payment updates + cart sync ─────────────────
+  // ── Realtime: order status + payment updates + cart sync + menu/shop ─────
   useEffect(() => {
-    if (!sessionId || screen === 'loading' || screen === 'error') return
+    if (!sessionId || screen === 'loading' || screen === 'error' || !session) return
+
+    const shopId = session.shop_id
 
     channelRef.current = supabase
       .channel(`customer-session:${sessionId}`)
@@ -252,7 +254,10 @@ function OrderPageContent() {
         table: 'customer_sessions',
         filter: `id=eq.${sessionId}`,
       }, (payload) => {
-        if (payload.new.status === 'paid') setScreen('paid')
+        const updated = payload.new as CustomerSession
+        if (updated.status === 'paid') setScreen('paid')
+        // Update discount fields realtime
+        setSession((prev) => prev ? { ...prev, discount_amount: updated.discount_amount ?? 0, discount_type: updated.discount_type, discount_note: updated.discount_note } : prev)
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -264,6 +269,54 @@ function OrderPageContent() {
           setTimeout(() => setScreen('paid'), 1500)
         }
       })
+      // Realtime: shop name / settings change
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'shops',
+        filter: `id=eq.${shopId}`,
+      }, (payload) => {
+        const s = payload.new as { name?: string; promptpay_id?: string; tax_rate?: number; payment_mode?: string }
+        if (s.name) setShopName(s.name)
+        if (s.promptpay_id !== undefined) setPromptpayId(s.promptpay_id ?? '')
+        if (s.tax_rate !== undefined) setTaxRate(s.tax_rate ?? 0.07)
+        if (s.payment_mode) setPaymentMode(s.payment_mode as 'auto' | 'counter')
+      })
+      // Realtime: product changes (add/edit/delete/deactivate)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'products',
+        filter: `shop_id=eq.${shopId}`,
+      }, async () => {
+        const { data: prods } = await supabase
+          .from('products').select('*').eq('shop_id', shopId).eq('is_active', true).order('name')
+        setProducts(prods ?? [])
+        // Remove cart items for products no longer active
+        const activeIds = new Set((prods ?? []).map((p: Product) => p.id))
+        setCart((prev) => {
+          const filtered = prev.filter((c) => activeIds.has(c.product.id))
+          if (filtered.length !== prev.length) saveCart(sessionId, filtered)
+          return filtered
+        })
+      })
+      // Realtime: category changes
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'categories',
+        filter: `shop_id=eq.${shopId}`,
+      }, async () => {
+        const { data: cats } = await supabase
+          .from('categories').select('*').eq('shop_id', shopId).order('sort_order')
+        setCategories(cats ?? [])
+      })
+      // Realtime: order_items changes (shop cancels item)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'order_items',
+      }, () => loadPlacedOrders(sessionId))
       // Broadcast: sync cart between devices sharing the same session
       .on('broadcast', { event: 'cart_sync' }, ({ payload }) => {
         if (payload.clientId === clientIdRef.current) return // ignore own broadcasts
@@ -284,7 +337,14 @@ function OrderPageContent() {
       .subscribe()
 
     return () => { channelRef.current?.unsubscribe() }
-  }, [sessionId, screen, products])
+  }, [sessionId, screen, session?.shop_id, products])
+
+  // ── Polling fallback: refresh placed orders every 3s (Realtime may miss order_items) ──
+  useEffect(() => {
+    if (!sessionId || (screen !== 'menu' && screen !== 'paying')) return
+    const interval = setInterval(() => loadPlacedOrders(sessionId), 3000)
+    return () => clearInterval(interval)
+  }, [sessionId, screen, loadPlacedOrders])
 
   // ── QR countdown ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -422,16 +482,14 @@ function OrderPageContent() {
 
   // ── Show payment QR ───────────────────────────────────────────────────────
   const handleShowPayment = () => {
-    const unpaidOrders = placedOrders.filter((o) => o.payment?.status !== 'success' && o.status !== 'cancelled')
-    const total = unpaidOrders.reduce((s, o) => s + (o.total_amount ?? 0), 0)
-    if (total <= 0) {
+    if (unpaidGrandTotal <= 0) {
       setDialog({ title: 'ไม่มียอดที่ต้องชำระ', message: 'ยังไม่มีออเดอร์ที่ค้างชำระ', resolve: () => {} })
       return
     }
 
     let qr = ''
     if (promptpayId) {
-      try { qr = generatePromptPayPayload(promptpayId, total) } catch { /* ignore */ }
+      try { qr = generatePromptPayPayload(promptpayId, unpaidGrandTotal) } catch { /* ignore */ }
     }
     setQrPayload(qr)
     setQrTimeLeft(600)
@@ -442,8 +500,29 @@ function OrderPageContent() {
   // ── Derived ───────────────────────────────────────────────────────────────
   const activeOrders = placedOrders.filter((o) => o.status !== 'cancelled')
   const unpaidOrders = activeOrders.filter((o) => o.payment?.status !== 'success')
-  const sessionTotal = activeOrders.reduce((s, o) => s + (o.total_amount ?? 0), 0)
-  const unpaidTotal  = unpaidOrders.reduce((s, o) => s + (o.total_amount ?? 0), 0)
+  // Calculate totals from active items (not o.total_amount) for accuracy when items are cancelled
+  const calcTotal = (orders: OrderWithItems[]) => orders.reduce((s, o) => {
+    const items = (o.items ?? []).filter((i) => (i.item_status ?? 'active') === 'active')
+    return s + items.reduce((s2, i) => s2 + Number(i.subtotal), 0)
+  }, 0)
+  const sessionTotal = calcTotal(activeOrders)
+  const unpaidTotal  = calcTotal(unpaidOrders)
+
+  // Discount from session (applied by shop staff)
+  const sessionDiscountAmt = session?.discount_type === 'percent'
+    ? Math.round(sessionTotal * (session.discount_amount ?? 0) / 100)
+    : (session?.discount_amount ?? 0)
+  const sessionGrandTotal = Math.max(0, sessionTotal - sessionDiscountAmt)
+  const unpaidGrandTotal = Math.max(0, unpaidTotal - sessionDiscountAmt)
+  // Re-generate QR when total changes on paying screen
+  useEffect(() => {
+    if (screen !== 'paying' || payStatus !== 'pending' || !promptpayId) return
+    try {
+      const qr = generatePromptPayPayload(promptpayId, unpaidGrandTotal)
+      setQrPayload(qr)
+    } catch { /* ignore */ }
+  }, [unpaidGrandTotal, screen, payStatus, promptpayId])
+
   const filteredProducts = selectedCategory
     ? products.filter((p) => p.category_id === selectedCategory)
     : products
@@ -488,7 +567,12 @@ function OrderPageContent() {
             <p className="text-primary-600 dark:text-primary-400 font-semibold mt-2">โต๊ะ {session.table_label}</p>
           )}
           {sessionTotal > 0 && (
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-4">{fmt(sessionTotal)}</p>
+            <div className="mt-4">
+              {sessionDiscountAmt > 0 && (
+                <p className="text-sm text-orange-500 line-through">{fmt(sessionTotal)}</p>
+              )}
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{fmt(sessionGrandTotal)}</p>
+            </div>
           )}
         </div>
       </div>
@@ -498,7 +582,7 @@ function OrderPageContent() {
   if (screen === 'paying') {
     const minutes = Math.floor(qrTimeLeft / 60)
     const seconds = qrTimeLeft % 60
-    const displayTotal = unpaidTotal
+    const displayTotal = unpaidGrandTotal
 
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
@@ -629,42 +713,60 @@ function OrderPageContent() {
 
         {/* Order success toast */}
         {orderSuccess && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-500 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 text-sm font-semibold animate-fade-in">
+          <div className="fixed top-20 left-0 right-0 flex justify-center z-50" style={{ animation: 'toastIn 0.25s ease-out' }}>
+          <div className="bg-green-500 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 text-sm font-semibold">
             <CheckCircle2 size={16} />
             ส่งออเดอร์ไปครัวแล้ว!
           </div>
+          </div>
         )}
 
-        {/* Placed orders summary */}
-        {activeOrders.length > 0 && (
+        {/* Placed orders summary — merged items across all orders */}
+        {activeOrders.length > 0 && (() => {
+          // Merge items across all orders by product
+          const mergedMap = new Map<string, { name: string; quantity: number; subtotal: number }>()
+          for (const order of activeOrders) {
+            for (const item of (order.items ?? []).filter((i) => (i.item_status ?? 'active') === 'active')) {
+              const name = (item as { product?: { name: string } }).product?.name ?? 'สินค้า'
+              const productId = (item as { product_id?: string }).product_id ?? item.id
+              const existing = mergedMap.get(productId)
+              if (existing) {
+                existing.quantity += item.quantity
+                existing.subtotal += item.subtotal
+              } else {
+                mergedMap.set(productId, { name, quantity: item.quantity, subtotal: item.subtotal })
+              }
+            }
+          }
+          const mergedList = Array.from(mergedMap.values())
+          return (
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-4 mb-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800 dark:text-slate-200 text-sm flex items-center gap-1.5">
                 <ChefHat size={15} className="text-primary-500" />
-                ออเดอร์ของคุณ ({activeOrders.length})
+                ออเดอร์ของคุณ ({mergedList.length} รายการ)
               </h3>
-              <span className="font-bold text-primary-600 dark:text-primary-400 text-sm">{fmt(sessionTotal)}</span>
+              <span className="font-bold text-primary-600 dark:text-primary-400 text-sm">{fmt(sessionGrandTotal)}</span>
             </div>
 
             <div className="space-y-2 mb-3">
-              {activeOrders.map((order) => {
-                const activeItems = (order.items ?? []).filter((i) => (i.item_status ?? 'active') === 'active')
-                const itemNames = activeItems.map((i) => `${(i as { product?: { name: string } }).product?.name ?? 'สินค้า'} ×${i.quantity}`).join('  •  ')
-                return (
-                  <div key={order.id} className="space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs text-gray-600 dark:text-slate-400 font-medium shrink-0">#{order.order_number}</span>
-                      </div>
-                      <span className="font-semibold text-sm shrink-0 text-gray-900 dark:text-slate-100">{fmt(order.total_amount ?? 0)}</span>
-                    </div>
-                    {itemNames && (
-                      <p className="text-xs text-gray-600 dark:text-slate-400 pl-1 leading-relaxed">{itemNames}</p>
-                    )}
-                  </div>
-                )
-              })}
+              {mergedList.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700 dark:text-slate-300">{item.name} ×{item.quantity}</span>
+                  <span className="font-semibold text-gray-900 dark:text-slate-100 shrink-0">{fmt(item.subtotal)}</span>
+                </div>
+              ))}
             </div>
+
+            {sessionDiscountAmt > 0 && (
+              <div className="flex items-center justify-between text-sm px-1 py-2 mb-2 border-t border-gray-100 dark:border-slate-700">
+                <span className="text-orange-600 dark:text-orange-400 font-medium">
+                  ส่วนลด {session?.discount_type === 'percent' ? `${session.discount_amount}%` : ''}
+                  {session?.discount_note ? ` (${session.discount_note})` : ''}
+                </span>
+                <span className="text-orange-600 dark:text-orange-400 font-semibold">-{fmt(sessionDiscountAmt)}</span>
+              </div>
+            )}
 
             {unpaidOrders.length > 0 && (
               paymentMode === 'auto' ? (
@@ -673,17 +775,18 @@ function OrderPageContent() {
                   className="w-full flex items-center justify-center gap-2 py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition shadow-md shadow-primary-500/25"
                 >
                   <CreditCard size={16} />
-                  ชำระเงิน {fmt(unpaidTotal)}
+                  ชำระเงิน {fmt(unpaidGrandTotal)}
                 </button>
               ) : (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-center">
-                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">ยอดรวม {fmt(unpaidTotal)}</p>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">ยอดรวม {fmt(unpaidGrandTotal)}</p>
                   <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">กรุณาชำระเงินที่เคาน์เตอร์</p>
                 </div>
               )
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* Category tabs */}
         {categories.length > 0 && (

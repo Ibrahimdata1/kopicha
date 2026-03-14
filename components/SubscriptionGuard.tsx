@@ -39,7 +39,7 @@ function getTrialDaysLeft(shop: Shop | null): number {
 
 function getStorageKey(shopId: string) {
   const today = new Date().toISOString().slice(0, 10)
-  return `kopicha_sub_dismissed_${shopId}_${today}`
+  return `qrforpay_sub_dismissed_${shopId}_${today}`
 }
 
 export default function SubscriptionGuard({ shop, children }: Props) {

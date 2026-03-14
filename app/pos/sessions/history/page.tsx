@@ -281,7 +281,6 @@ export default function SessionHistoryPage() {
                     {SESSION_STATUS_LABEL[session.status]}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 font-mono">{session.id.slice(0, 16)}...</p>
                 <p className="text-xs text-muted mt-0.5">
                   {new Date(session.created_at).toLocaleString('th-TH')}
                   {session.order_count > 0 && ` · ${session.order_count} ออเดอร์ · ${fmt(session.total_amount)}`}

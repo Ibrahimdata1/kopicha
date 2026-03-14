@@ -53,7 +53,7 @@ export default function PosNav({ profile }: Props) {
                 <Coffee size={14} strokeWidth={2.5} className="text-white" />
               </div>
               <span className="font-bold text-sm hidden sm:block tracking-tight text-gray-900 dark:text-slate-100">
-                Kopicha
+                QRforPay
               </span>
             </Link>
 
@@ -64,14 +64,14 @@ export default function PosNav({ profile }: Props) {
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 min-w-[44px] min-h-[44px] ${
                     active
                       ? 'bg-primary-50 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300'
                       : 'text-gray-500 dark:text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-slate-200'
                   }`}
                 >
                   <Icon
-                    size={15}
+                    size={18}
                     strokeWidth={active ? 2.5 : 2}
                     className={active ? 'text-primary-600 dark:text-primary-400' : ''}
                   />

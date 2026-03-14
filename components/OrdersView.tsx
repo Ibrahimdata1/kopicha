@@ -21,18 +21,23 @@ interface Bill {
   shop_id: string
   item_count: number
   total_amount: number
+  discount_amount?: number
+  discount_type?: 'percent' | 'fixed' | null
+  discount_note?: string | null
 }
 
 function fmt(n: number) {
   return '฿' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-  if (diff < 1) return 'เมื่อกี้'
-  if (diff < 60) return `${diff} น.`
-  if (diff < 1440) return `${Math.floor(diff / 60)} ชม.`
-  return `${Math.floor(diff / 1440)} วัน`
+function fmtTime(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+  // Same day — show just time
+  if (d.toDateString() === now.toDateString()) return time
+  // Different day — show date + time
+  return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + time
 }
 
 const BILL_STATUS = {
@@ -68,7 +73,7 @@ export default function OrdersView({ shop, profile }: Props) {
     try {
       let query = supabase
         .from('customer_sessions')
-        .select('id, shop_id, status, table_label, created_at, paid_at, cancelled_at, created_by')
+        .select('id, shop_id, status, table_label, created_at, paid_at, cancelled_at, created_by, discount_amount, discount_type, discount_note')
         .eq('shop_id', shop.id)
         .order('created_at', { ascending: false })
         .limit(200)
@@ -91,15 +96,16 @@ export default function OrdersView({ shop, profile }: Props) {
 
       const orderIds = (orders ?? []).map((o) => o.id)
       const { data: items } = orderIds.length > 0
-        ? await supabase.from('order_items').select('id, order_id, item_status').in('order_id', orderIds)
+        ? await supabase.from('order_items').select('id, order_id, item_status, subtotal').in('order_id', orderIds)
         : { data: [] }
 
       const billList: Bill[] = sessions.map((s) => {
         const sOrders = (orders ?? []).filter((o) => o.customer_session_id === s.id)
-        const total = sOrders.reduce((sum, o) => sum + (o.total_amount ?? 0), 0)
         const sItems = (items ?? []).filter((i) =>
           sOrders.some((o) => o.id === i.order_id) && (i.item_status ?? 'active') === 'active'
         )
+        // Calculate total from active items (not orders.total_amount) for accuracy during partial updates
+        const total = sItems.reduce((sum, i) => sum + Number((i as { subtotal?: number }).subtotal ?? 0), 0)
         return {
           id: s.id,
           shop_id: s.shop_id,
@@ -145,6 +151,9 @@ export default function OrdersView({ shop, profile }: Props) {
         created_at: bill.created_at,
         paid_at: bill.paid_at ?? null,
         cancelled_at: bill.cancelled_at ?? null,
+        discount_amount: bill.discount_amount ?? 0,
+        discount_type: bill.discount_type ?? null,
+        discount_note: bill.discount_note ?? null,
         orders,
         total_amount: bill.total_amount,
       }
@@ -212,7 +221,7 @@ export default function OrdersView({ shop, profile }: Props) {
                       <span className="text-xs font-bold text-primary-600 dark:text-primary-400">โต๊ะ {bill.table_label}</span>
                     )}
                   </div>
-                  <p className="text-xs text-subtle font-mono">{bill.id.slice(0, 8)}... · {timeAgo(bill.created_at)}</p>
+                  <p className="text-xs text-subtle">{fmtTime(bill.created_at)}</p>
                 </div>
                 <span className="text-xs text-muted shrink-0">
                   {bill.item_count > 0 ? `${bill.item_count} รายการ` : '—'}

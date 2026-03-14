@@ -28,11 +28,12 @@ function fmt(n: number | null | undefined) {
   return '฿' + (n ?? 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-  if (diff < 1) return 'เมื่อกี้'
-  if (diff < 60) return `${diff} นาที`
-  return `${Math.floor(diff / 60)} ชม.`
+function fmtTime(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === now.toDateString()) return time
+  return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + time
 }
 
 export default function TablesPage() {
@@ -84,7 +85,11 @@ export default function TablesPage() {
       for (const s of (sessions ?? []) as CustomerSession[]) {
         if (s.table_label) {
           const sessionOrders = orders.filter((o) => o.customer_session_id === s.id)
-          const total = sessionOrders.reduce((sum, o) => sum + (o.total_amount ?? 0), 0)
+          // Calculate total from active items (not orders.total_amount) so it's always accurate even during partial updates
+          const total = sessionOrders.reduce((sum, o) => {
+            const activeItems = (o.items ?? []).filter((i) => (i.item_status ?? 'active') === 'active')
+            return sum + activeItems.reduce((s2, i) => s2 + Number(i.subtotal), 0)
+          }, 0)
           sessionByTable.set(s.table_label, { ...s, orders: sessionOrders, total_amount: total })
         }
       }
@@ -109,23 +114,32 @@ export default function TablesPage() {
 
   useEffect(() => { fetchTables() }, [fetchTables])
 
-  // Realtime
+  // Realtime — delay refetch slightly so DB updates have time to propagate
   useEffect(() => {
     if (!shop?.id) return
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const debouncedFetch = () => {
+      if (timeout) clearTimeout(timeout)
+      timeout = setTimeout(fetchTables, 500)
+    }
     channelRef.current = supabase
       .channel(`tables:${shop.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `shop_id=eq.${shop.id}` }, fetchTables)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_sessions', filter: `shop_id=eq.${shop.id}` }, fetchTables)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `shop_id=eq.${shop.id}` }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_sessions', filter: `shop_id=eq.${shop.id}` }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, debouncedFetch)
       .subscribe()
-    return () => { channelRef.current?.unsubscribe() }
+    return () => { if (timeout) clearTimeout(timeout); channelRef.current?.unsubscribe() }
   }, [shop?.id, fetchTables])
 
-  // Update selected session when data changes + auto-open newly created session
+  // Polling fallback — Realtime may miss order_items events (no filter support)
   useEffect(() => {
-    if (selectedSession) {
-      const table = tables.find((t) => t.session?.id === selectedSession.id)
-      if (table?.session) setSelectedSession(table.session)
-    }
+    if (!shop?.id || tableCount === 0) return
+    const interval = setInterval(fetchTables, 5000)
+    return () => clearInterval(interval)
+  }, [shop?.id, tableCount, fetchTables])
+
+  // Auto-open newly created session (don't auto-update selectedSession from tables — modal manages its own state)
+  useEffect(() => {
     if (pendingSessionId) {
       const table = tables.find((t) => t.session?.id === pendingSessionId)
       if (table?.session) {
@@ -339,10 +353,10 @@ export default function TablesPage() {
                 {table.status === 'occupied' && !movingFrom && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setMovingFrom(table.key) }}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                    className="p-2.5 -m-1 rounded-xl text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
                     title="ย้ายโต๊ะ"
                   >
-                    <ArrowRightLeft size={14} />
+                    <ArrowRightLeft size={18} />
                   </button>
                 )}
               </div>
@@ -355,10 +369,21 @@ export default function TablesPage() {
                     <span className="text-xs font-medium text-amber-600 dark:text-amber-400">ไม่ว่าง</span>
                   </div>
                   <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    {fmt(table.session.total_amount)}
+                    {(() => {
+                      const sub = table.session!.total_amount
+                      const dAmt = table.session!.discount_type === 'percent'
+                        ? Math.round(sub * (table.session!.discount_amount ?? 0) / 100)
+                        : (table.session!.discount_amount ?? 0)
+                      return dAmt > 0 ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-xs line-through text-muted font-normal">{fmt(sub)}</span>
+                          {fmt(Math.max(0, sub - dAmt))}
+                        </span>
+                      ) : fmt(sub)
+                    })()}
                   </p>
                   <p className="text-xs text-muted mt-0.5">
-                    {table.session.orders.reduce((s, o) => s + (o.items ?? []).filter((i) => (i.item_status ?? 'active') === 'active').length, 0)} รายการ · {timeAgo(table.session.created_at)}
+                    {table.session.orders.reduce((s, o) => s + (o.items ?? []).filter((i) => (i.item_status ?? 'active') === 'active').length, 0)} รายการ · {fmtTime(table.session.created_at)}
                   </p>
                 </div>
               ) : isAvailableTarget ? (

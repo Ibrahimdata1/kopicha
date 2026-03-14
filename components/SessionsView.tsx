@@ -19,11 +19,12 @@ function fmt(n: number | null | undefined) {
   return '฿' + (n ?? 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-  if (diff < 1) return 'เมื่อกี้'
-  if (diff < 60) return `${diff} นาที`
-  return `${Math.floor(diff / 60)} ชม.`
+function fmtTime(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === now.toDateString()) return time
+  return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + time
 }
 
 const BILL_STATUS = {
@@ -149,7 +150,7 @@ export default function SessionsView({ shop, profile }: Props) {
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className={status.badge}>{status.label}</span>
-                  <span className="text-xs text-subtle">{timeAgo(session.created_at)}</span>
+                  <span className="text-xs text-subtle">{fmtTime(session.created_at)}</span>
                 </div>
                 {session.table_label && (
                   <p className="text-lg font-bold text-primary-600 dark:text-primary-400 mb-1">
@@ -159,10 +160,7 @@ export default function SessionsView({ shop, profile }: Props) {
                 <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1 tracking-tight">
                   {fmt(session.total_amount)}
                 </p>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted">{itemCount > 0 ? `${itemCount} รายการ` : 'ยังไม่มีรายการ'}</p>
-                  <p className="text-xs text-subtle font-mono">{session.id.slice(0, 6)}...</p>
-                </div>
+                <p className="text-sm text-muted">{itemCount > 0 ? `${itemCount} รายการ` : 'ยังไม่มีรายการ'}</p>
               </button>
             )
           })}

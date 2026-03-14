@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/lib/theme-provider'
@@ -9,9 +9,22 @@ const inter = Inter({
   variable: '--font-inter',
 })
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
+  ],
+}
+
 export const metadata: Metadata = {
-  title: 'Kopicha POS',
+  title: 'QRforPay',
   description: 'QR-based ordering and payment system for modern cafés',
+  metadataBase: new URL('https://kopicha.vercel.app'),
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'QRforPay' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

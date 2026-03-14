@@ -6,6 +6,7 @@ import { usePosContext } from '@/lib/pos-context'
 import type { PendingUser, TeamMember } from '@/lib/types'
 import { useConfirm } from '@/components/ConfirmDialog'
 import {
+  Camera,
   Check,
   Clock,
   CreditCard,
@@ -18,6 +19,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react'
+import Image from 'next/image'
 
 export default function SettingsPage() {
   const supabase = createClient()
@@ -39,6 +41,8 @@ export default function SettingsPage() {
   const [cashierPassword, setCashierPassword] = useState('')
   const [isCreatingCashier, setIsCreatingCashier] = useState(false)
   const [cashierMsg, setCashierMsg] = useState('')
+
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
 
   const [error, setError] = useState('')
 
@@ -156,6 +160,43 @@ export default function SettingsPage() {
     }
   }
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !shop?.id) return
+    if (!file.type.startsWith('image/')) { setError('กรุณาเลือกไฟล์รูปภาพ'); return }
+    if (file.size > 2 * 1024 * 1024) { setError('ขนาดไฟล์ต้องไม่เกิน 2MB'); return }
+
+    setIsUploadingLogo(true)
+    setError('')
+    try {
+      const ext = file.name.split('.').pop() ?? 'png'
+      const filePath = `${shop.id}/logo.${ext}`
+
+      const { error: uploadErr } = await supabase.storage
+        .from('shop-logos')
+        .upload(filePath, file, { upsert: true })
+      if (uploadErr) throw uploadErr
+
+      const { data: urlData } = supabase.storage
+        .from('shop-logos')
+        .getPublicUrl(filePath)
+
+      const logoUrl = urlData.publicUrl + '?t=' + Date.now()
+
+      const { error: updateErr } = await supabase
+        .from('shops')
+        .update({ logo_url: logoUrl })
+        .eq('id', shop.id)
+      if (updateErr) throw updateErr
+
+      await refreshShop()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'อัพโหลดไม่สำเร็จ')
+    } finally {
+      setIsUploadingLogo(false)
+    }
+  }
+
   const ROLE_LABEL: Record<string, string> = {
     super_admin: 'Super Admin',
     owner: 'เจ้าของ',
@@ -191,6 +232,38 @@ export default function SettingsPage() {
             <Store size={16} className="text-gray-400 dark:text-slate-500" />
             <h2 className="font-bold text-gray-900 dark:text-slate-100">ข้อมูลร้านค้า</h2>
           </div>
+          {/* Shop Logo — owner only */}
+          {isOwner && (
+            <div className="flex items-center gap-4 mb-5 pb-5 border-b border-gray-100 dark:border-slate-700">
+              <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 shrink-0 flex items-center justify-center">
+                {shop.logo_url ? (
+                  <Image src={shop.logo_url} alt="Logo" width={64} height={64} className="object-cover w-full h-full" />
+                ) : (
+                  <Store size={24} className="text-gray-300 dark:text-slate-500" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-1">โลโก้ร้าน</p>
+                <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors ${
+                  isUploadingLogo
+                    ? 'bg-gray-100 dark:bg-slate-700 text-gray-400'
+                    : 'bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-950/50'
+                }`}>
+                  <Camera size={13} />
+                  {isUploadingLogo ? 'กำลังอัพโหลด...' : 'เปลี่ยนรูป'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    disabled={isUploadingLogo}
+                    className="hidden"
+                  />
+                </label>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">สูงสุด 2MB</p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSaveShop} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">ชื่อร้าน</label>
@@ -270,8 +343,8 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* Team */}
-      {(isOwner || isSuperAdmin) && shop && (
+      {/* Team — super_admin only (premium feature, hidden for Pro plan) */}
+      {isSuperAdmin && shop && (
         <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Users size={16} className="text-gray-400 dark:text-slate-500" />

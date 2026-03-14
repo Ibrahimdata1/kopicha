@@ -38,7 +38,7 @@ export default async function RootPage() {
             <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center shadow-sm shadow-primary-500/30">
               <Coffee size={16} strokeWidth={2.5} className="text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-gray-900 dark:text-slate-100">Kopicha</span>
+            <span className="font-bold text-lg tracking-tight text-gray-900 dark:text-slate-100">QRforPay</span>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/partner" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition hidden sm:block">
@@ -160,8 +160,8 @@ export default async function RootPage() {
               <Handshake size={14} />
               โปรแกรมตัวแทนขาย
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-3">หารายได้เสริม เป็นตัวแทนขาย Kopicha</h2>
-            <p className="text-gray-600 dark:text-slate-400 max-w-2xl mx-auto">แนะนำร้านอาหาร/คาเฟ่ให้ใช้ Kopicha รับเงิน ฿999 ต่อร้านทันที ไม่ต้องสมัคร ไม่ต้องลงทุน</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-3">หารายได้เสริม เป็นตัวแทนขาย QRforPay</h2>
+            <p className="text-gray-600 dark:text-slate-400 max-w-2xl mx-auto">แนะนำร้านอาหาร/คาเฟ่ให้ใช้ QRforPay รับเงิน ฿999 ต่อร้านทันที ไม่ต้องสมัคร ไม่ต้องลงทุน</p>
           </div>
 
           <div className="grid sm:grid-cols-3 gap-4 mb-10">
@@ -196,7 +196,7 @@ export default async function RootPage() {
                 <div className="w-8 h-8 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">1</div>
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-slate-100">เดินเข้าร้าน หรือติดต่อเจ้าของร้าน</p>
-                  <p className="text-sm text-gray-500 dark:text-slate-400">แนะนำ Kopicha ให้ร้านอาหาร/คาเฟ่ที่สนใจ</p>
+                  <p className="text-sm text-gray-500 dark:text-slate-400">แนะนำ QRforPay ให้ร้านอาหาร/คาเฟ่ที่สนใจ</p>
                 </div>
               </div>
               <div className="flex gap-4">
@@ -245,7 +245,7 @@ export default async function RootPage() {
       {/* CTA */}
       <section className="bg-primary-500 py-14">
         <div className="max-w-5xl mx-auto px-4 text-center">
-          <h2 className="text-2xl font-bold text-white mb-3">พร้อมเริ่มใช้ Kopicha?</h2>
+          <h2 className="text-2xl font-bold text-white mb-3">พร้อมเริ่มใช้ QRforPay?</h2>
           <p className="text-primary-100 mb-6">สมัครวันนี้ เริ่มรับออเดอร์ได้ทันที</p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
@@ -273,7 +273,7 @@ export default async function RootPage() {
             <div className="w-6 h-6 bg-primary-500 rounded-lg flex items-center justify-center">
               <Coffee size={12} strokeWidth={2.5} className="text-white" />
             </div>
-            <span className="font-bold text-gray-900 dark:text-slate-100">Kopicha POS</span>
+            <span className="font-bold text-gray-900 dark:text-slate-100">QRforPay</span>
           </div>
           <p className="text-sm text-gray-500 dark:text-slate-400">ระบบ POS สำหรับร้านอาหารและคาเฟ่</p>
         </div>
