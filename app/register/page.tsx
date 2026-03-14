@@ -1,18 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { Coffee, Store, User, Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Coffee, Store, User, Mail, Lock, ArrowRight, ArrowLeft, Ticket } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [step, setStep] = useState<'account' | 'shop'>('account')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [shopName, setShopName] = useState('')
   const [promptpay, setPromptpay] = useState('')
+  const [referralCode, setReferralCode] = useState(searchParams.get('ref') ?? '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -56,14 +58,24 @@ export default function RegisterPage() {
       })
       if (signUpError) throw signUpError
 
-      // Submit owner info (shop name + promptpay) via RPC
-      const { error: rpcError } = await supabase.rpc('submit_owner_info', {
+      // Self-service: create shop immediately (no admin approval needed)
+      const { data: result, error: rpcError } = await supabase.rpc('self_register_shop', {
         p_shop_name: shopName.trim(),
         p_promptpay: promptpay.trim(),
+        p_referral_code: referralCode.trim() || null,
       })
-      if (rpcError) throw rpcError
+      if (rpcError) {
+        // Fallback to old flow if new RPC doesn't exist yet
+        await supabase.rpc('submit_owner_info', {
+          p_shop_name: shopName.trim(),
+          p_promptpay: promptpay.trim(),
+        })
+        router.push('/pending')
+        return
+      }
+      if (result?.error) throw new Error(result.error)
 
-      router.push('/pending')
+      router.push('/pos/tables')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด'
       setError(msg)
@@ -182,6 +194,24 @@ export default function RegisterPage() {
                   placeholder="0812345678"
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  <Ticket size={13} className="inline mr-1.5 text-slate-400" />
+                  รหัสตัวแทน <span className="text-muted font-normal">(ถ้ามี)</span>
+                </label>
+                <input
+                  type="text"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                  className="input"
+                  placeholder="เช่น AGENT-SOM"
+                />
+                {referralCode.trim() ? (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5">สมัครผ่านตัวแทน — ค่าแรกเข้า ฿999 ชำระกับตัวแทนแล้ว</p>
+                ) : (
+                  <p className="text-xs text-muted mt-1.5">ไม่มีรหัส? ค่าแรกเข้า ฿999 ชำระภายหลังผ่านระบบ</p>
+                )}
               </div>
 
               {error && (
