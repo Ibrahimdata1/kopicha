@@ -41,9 +41,9 @@ export default async function RootPage() {
             <span className="font-bold text-lg tracking-tight text-gray-900 dark:text-slate-100">Kopicha</span>
           </div>
           <div className="flex items-center gap-3">
-            <a href="#partner" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition hidden sm:block">
+            <Link href="/partner" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition hidden sm:block">
               ตัวแทนขาย
-            </a>
+            </Link>
             <Link href="/login" className="text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition">
               เข้าสู่ระบบ
             </Link>
@@ -229,16 +229,14 @@ export default async function RootPage() {
             </div>
 
             <div className="mt-6 text-center">
-              <a
-                href="https://line.me/ti/p/~kopicha"
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href="/partner"
                 className="inline-flex items-center gap-2 px-8 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition shadow-lg shadow-amber-500/25 text-base"
               >
-                สนใจ? ทักมาเลย
+                สมัครเป็นตัวแทน — ฟรี
                 <ArrowRight size={18} />
-              </a>
-              <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">ไม่ต้องสมัคร แค่ทัก LINE มาคุยได้เลย</p>
+              </Link>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">กรอกข้อมูล 30 วินาที รับรหัสตัวแทนทันที</p>
             </div>
           </div>
         </div>

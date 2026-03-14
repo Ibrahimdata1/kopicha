@@ -1,5 +1,5 @@
 -- Self-service registration with optional referral/agent code
--- If referral code is provided → shop is marked as setup_fee_paid (agent collected ฿999)
+-- If referral code is provided → validates against agents table → marks setup_fee_paid
 -- If no referral code → shop needs to pay ฿999 setup fee to Kopicha
 
 CREATE OR REPLACE FUNCTION self_register_shop(
@@ -15,7 +15,8 @@ DECLARE
   v_user_id UUID := auth.uid();
   v_profile RECORD;
   v_shop_id UUID;
-  v_has_referral BOOLEAN := (p_referral_code IS NOT NULL AND trim(p_referral_code) != '');
+  v_code TEXT := NULLIF(trim(COALESCE(p_referral_code, '')), '');
+  v_has_referral BOOLEAN := false;
 BEGIN
   SELECT * INTO v_profile FROM profiles WHERE id = v_user_id;
   IF NOT FOUND THEN
@@ -25,9 +26,18 @@ BEGIN
     RETURN json_build_object('error', 'User already has a role');
   END IF;
 
+  -- Validate referral code if provided
+  IF v_code IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM agents WHERE code = v_code AND active = true) THEN
+      v_has_referral := true;
+    ELSE
+      RETURN json_build_object('error', 'รหัสตัวแทนไม่ถูกต้อง');
+    END IF;
+  END IF;
+
   INSERT INTO shops (name, promptpay_id, table_count, tax_rate, payment_mode, referral_code, setup_fee_paid)
   VALUES (p_shop_name, p_promptpay, 10, 0.07, 'counter',
-          CASE WHEN v_has_referral THEN trim(p_referral_code) ELSE NULL END,
+          CASE WHEN v_has_referral THEN v_code ELSE NULL END,
           v_has_referral)
   RETURNING id INTO v_shop_id;
 

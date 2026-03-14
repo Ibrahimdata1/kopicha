@@ -208,9 +208,9 @@ export default function RegisterPage() {
                   placeholder="เช่น AGENT-SOM"
                 />
                 {referralCode.trim() ? (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5">สมัครผ่านตัวแทน — ค่าแรกเข้า ฿999 ชำระกับตัวแทนแล้ว</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5">สมัครผ่านตัวแทน — ค่าแรกเข้า ฿999 ชำระให้ตัวแทนแล้ว</p>
                 ) : (
-                  <p className="text-xs text-muted mt-1.5">ไม่มีรหัส? ค่าแรกเข้า ฿999 ชำระภายหลังผ่านระบบ</p>
+                  <p className="text-xs text-muted mt-1.5">ไม่มีรหัสตัวแทน? ค่าแรกเข้า ฿999 ชำระผ่านระบบภายหลัง</p>
                 )}
               </div>
 
