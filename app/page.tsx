@@ -72,7 +72,7 @@ export default async function RootPage() {
             href="/register"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition shadow-lg shadow-primary-500/25 text-base"
           >
-            เริ่มใช้ฟรี 7 วัน
+            สมัครใช้งาน ฿999
             <ArrowRight size={18} />
           </Link>
           <a
@@ -80,6 +80,13 @@ export default async function RootPage() {
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 font-bold rounded-xl transition text-base"
           >
             ดูราคา
+          </a>
+          <a
+            href="#partner"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 text-amber-600 dark:text-amber-400 font-bold rounded-xl transition text-base hover:bg-amber-50 dark:hover:bg-amber-950/20"
+          >
+            <Handshake size={18} />
+            สนใจเป็นตัวแทนขาย
           </a>
         </div>
       </section>
@@ -136,10 +143,10 @@ export default async function RootPage() {
                 href="/register"
                 className="w-full inline-flex items-center justify-center gap-2 py-3.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition shadow-md shadow-primary-500/25"
               >
-                เริ่มใช้ฟรี 7 วัน
+                สมัครเลย
                 <ArrowRight size={16} />
               </Link>
-              <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-3">ทดลองฟรี ไม่ต้องใส่บัตรเครดิต</p>
+              <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-3">เริ่มใช้ได้ทันที ไม่ต้องรอ approve</p>
             </div>
           </div>
         </div>
@@ -154,7 +161,7 @@ export default async function RootPage() {
               โปรแกรมตัวแทนขาย
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-3">หารายได้เสริม เป็นตัวแทนขาย Kopicha</h2>
-            <p className="text-gray-600 dark:text-slate-400 max-w-2xl mx-auto">แนะนำร้านอาหาร/คาเฟ่ให้ใช้ Kopicha รับค่าคอมมิชชั่นทันที ไม่ต้องลงทุน ไม่ต้องสต๊อกสินค้า</p>
+            <p className="text-gray-600 dark:text-slate-400 max-w-2xl mx-auto">แนะนำร้านอาหาร/คาเฟ่ให้ใช้ Kopicha รับเงิน ฿999 ต่อร้านทันที ไม่ต้องสมัคร ไม่ต้องลงทุน</p>
           </div>
 
           <div className="grid sm:grid-cols-3 gap-4 mb-10">
@@ -228,10 +235,10 @@ export default async function RootPage() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-8 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition shadow-lg shadow-amber-500/25 text-base"
               >
-                สมัครเป็นตัวแทน
+                สนใจ? ทักมาเลย
                 <ArrowRight size={18} />
               </a>
-              <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">ติดต่อทาง LINE เพื่อเริ่มต้น</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">ไม่ต้องสมัคร แค่ทัก LINE มาคุยได้เลย</p>
             </div>
           </div>
         </div>
