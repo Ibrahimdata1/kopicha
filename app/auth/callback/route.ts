@@ -37,6 +37,9 @@ export async function GET(request: NextRequest) {
         if (!profile?.role) {
           return NextResponse.redirect(`${origin}/register/shop`)
         }
+        if (profile.role === 'super_admin') {
+          return NextResponse.redirect(`${origin}/pos/admin`)
+        }
       }
       return NextResponse.redirect(`${origin}${next}`)
     }

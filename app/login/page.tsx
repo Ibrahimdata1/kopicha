@@ -32,6 +32,8 @@ export default function LoginPage() {
 
       if (!profile?.role) {
         router.push('/pending')
+      } else if (profile.role === 'super_admin') {
+        router.push('/pos/admin')
       } else {
         router.push('/pos/sessions')
       }
