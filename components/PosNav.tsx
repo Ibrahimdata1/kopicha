@@ -48,7 +48,7 @@ export default function PosNav({ profile }: Props) {
           {/* Left: Logo + Nav */}
           <div className="flex items-center gap-0.5">
             {/* Logo */}
-            <Link href="/pos/tables" className="flex items-center gap-2 mr-4 select-none">
+            <Link href={isSuperAdmin ? '/pos/admin' : '/pos/tables'} className="flex items-center gap-2 mr-4 select-none">
               <div className="w-7 h-7 bg-primary-500 rounded-lg flex items-center justify-center shadow-sm shadow-primary-500/30">
                 <Coffee size={14} strokeWidth={2.5} className="text-white" />
               </div>
@@ -57,8 +57,8 @@ export default function PosNav({ profile }: Props) {
               </span>
             </Link>
 
-            {/* Nav items */}
-            {NAV_ITEMS.map(({ href, label, Icon }) => {
+            {/* Nav items — Super Admin เห็นแค่ Admin tab */}
+            {!isSuperAdmin && NAV_ITEMS.map(({ href, label, Icon }) => {
               const active = pathname.startsWith(href)
               return (
                 <Link

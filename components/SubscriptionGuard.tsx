@@ -7,8 +7,6 @@ import { AlertTriangle, X, Ticket, Check, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import type { Shop } from '@/lib/types'
 
-// Company PromptPay for receiving payments
-const COMPANY_PROMPTPAY = '0994569544'
 const MONTHLY_FEE = 199
 const SETUP_FEE = 999
 const TRIAL_DAYS = 7
@@ -49,6 +47,21 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   const [referralError, setReferralError] = useState('')
   const [referralLoading, setReferralLoading] = useState(false)
   const [setupFeePaid, setSetupFeePaid] = useState(shop?.setup_fee_paid ?? false)
+  const [companyPromptpay, setCompanyPromptpay] = useState('0994569544')
+
+  // Fetch company PromptPay from super admin profile (pending_promptpay field)
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('profiles')
+      .select('pending_promptpay')
+      .eq('role', 'super_admin')
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data?.pending_promptpay) setCompanyPromptpay(data.pending_promptpay)
+      })
+  }, [])
 
   const daysOverdue = getDaysOverdue(shop)
   const trialDaysLeft = getTrialDaysLeft(shop)
@@ -124,8 +137,8 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   let setupQr = ''
   let monthlyQr = ''
   try {
-    setupQr = generatePromptPayPayload(COMPANY_PROMPTPAY, SETUP_FEE)
-    monthlyQr = generatePromptPayPayload(COMPANY_PROMPTPAY, MONTHLY_FEE)
+    setupQr = generatePromptPayPayload(companyPromptpay, SETUP_FEE)
+    monthlyQr = generatePromptPayPayload(companyPromptpay, MONTHLY_FEE)
   } catch { /* ignore */ }
 
   // === SETUP FEE PAYWALL (trial expired, hasn't paid ฿999) ===
@@ -161,7 +174,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
               สแกน QR PromptPay เพื่อชำระเงิน
             </p>
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 text-center">
-              PromptPay: {COMPANY_PROMPTPAY}
+              PromptPay: {companyPromptpay}
             </p>
             <button
               onClick={handleMarkPaid}
@@ -240,7 +253,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
               สแกน QR PromptPay เพื่อชำระเงิน
             </p>
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-              PromptPay: {COMPANY_PROMPTPAY}
+              PromptPay: {companyPromptpay}
             </p>
           </div>
 
@@ -317,7 +330,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                   สแกน QR PromptPay เพื่อชำระเงิน
                 </p>
                 <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-                  PromptPay: {COMPANY_PROMPTPAY}
+                  PromptPay: {companyPromptpay}
                 </p>
                 <button
                   onClick={handleDismiss}

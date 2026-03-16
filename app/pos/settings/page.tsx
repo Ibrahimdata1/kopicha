@@ -343,8 +343,8 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* Team — super_admin only (premium feature, hidden for Pro plan) */}
-      {isSuperAdmin && shop && (
+      {/* Team — owner and super_admin can manage team */}
+      {(isOwner || isSuperAdmin) && shop && (
         <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Users size={16} className="text-gray-400 dark:text-slate-500" />

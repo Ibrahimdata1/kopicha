@@ -8,14 +8,13 @@ import {
   Building2,
   CalendarPlus,
   Check,
-  Clock,
+  Save,
+  Settings,
   ShieldAlert,
   Store,
   Trash2,
   Users,
-  X,
 } from 'lucide-react'
-import type { PendingUser } from '@/lib/types'
 import { useConfirm } from '@/components/ConfirmDialog'
 
 interface ShopRow {
@@ -37,11 +36,12 @@ export default function AdminPage() {
   const supabase = createClient()
   const { profile } = usePosContext()
   const [shops, setShops] = useState<ShopRow[]>([])
-  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const [companyPromptpay, setCompanyPromptpay] = useState('')
+  const [savingConfig, setSavingConfig] = useState(false)
   const { confirm, ConfirmDialogUI } = useConfirm()
 
   useEffect(() => {
@@ -76,43 +76,37 @@ export default function AdminPage() {
       }))
       setShops(enriched)
 
-      // Load pending users
-      const { data: pending } = await supabase.rpc('get_pending_users')
-      setPendingUsers((pending ?? []) as PendingUser[])
+      // Load company PromptPay from super admin profile
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('pending_promptpay')
+        .eq('role', 'super_admin')
+        .limit(1)
+        .single()
+      if (adminProfile?.pending_promptpay) setCompanyPromptpay(adminProfile.pending_promptpay)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleApprove = async (user: PendingUser) => {
+  const handleSaveConfig = async () => {
+    setSavingConfig(true)
     setError('')
     try {
-      const { error: rpcErr } = await supabase.rpc('approve_owner_signup', {
-        p_user_id: user.id,
-        p_shop_name: user.pending_shop_name ?? 'New Shop',
-        p_promptpay: user.pending_promptpay ?? '',
-      })
-      if (rpcErr) throw rpcErr
-      setSuccessMsg(`อนุมัติ ${user.full_name ?? user.email} เรียบร้อย`)
+      // Save company PromptPay to super admin's own profile
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('ไม่พบข้อมูลผู้ใช้')
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ pending_promptpay: companyPromptpay })
+        .eq('id', user.id)
+      if (updateErr) throw updateErr
+      setSuccessMsg('บันทึก PromptPay รับเงินเรียบร้อย')
       setTimeout(() => setSuccessMsg(''), 3000)
-      await loadData()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
-    }
-  }
-
-  const handleReject = async (userId: string) => {
-    const ok = await confirm({ title: 'ปฏิเสธคำขอนี้?', confirmLabel: 'ปฏิเสธ', danger: true })
-    if (!ok) return
-    setError('')
-    setActionLoading(userId)
-    try {
-      await supabase.from('profiles').update({ pending_shop_name: null, pending_promptpay: null }).eq('id', userId)
-      setPendingUsers((prev) => prev.filter((u) => u.id !== userId))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
-      setActionLoading(null)
+      setSavingConfig(false)
     }
   }
 
@@ -203,7 +197,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Super Admin Panel</h1>
           <p className="text-sm text-gray-500 dark:text-slate-400">
-            จัดการร้านค้า {shops.length} ร้าน · คำขอรอ {pendingUsers.length} รายการ
+            จัดการร้านค้า {shops.length} ร้าน
           </p>
         </div>
       </div>
@@ -222,55 +216,35 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Pending Approvals */}
-      {pendingUsers.length > 0 && (
-        <section className="bg-white dark:bg-slate-800 rounded-2xl border border-amber-200 dark:border-amber-700/40 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700/40">
-            <Clock size={16} className="text-amber-600 dark:text-amber-400" />
-            <h2 className="font-semibold text-amber-800 dark:text-amber-300">
-              รออนุมัติ ({pendingUsers.length})
-            </h2>
+      {/* System Config */}
+      <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 dark:border-slate-700">
+          <Settings size={16} className="text-gray-400 dark:text-slate-500" />
+          <h2 className="font-semibold text-gray-900 dark:text-slate-100">ตั้งค่าระบบ</h2>
+        </div>
+        <div className="px-6 py-4 space-y-3">
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+            PromptPay รับเงินจาก Owner
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={companyPromptpay}
+              onChange={(e) => setCompanyPromptpay(e.target.value)}
+              className="input flex-1"
+              placeholder="เบอร์โทร หรือ เลขบัตรประชาชน"
+            />
+            <button
+              onClick={handleSaveConfig}
+              disabled={savingConfig}
+              className="flex items-center gap-1.5 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <Save size={14} />
+              {savingConfig ? 'กำลังบันทึก...' : 'บันทึก'}
+            </button>
           </div>
-          <div className="divide-y divide-gray-100 dark:divide-slate-700">
-            {pendingUsers.map((user) => (
-              <div key={user.id} className="flex items-start justify-between gap-4 px-6 py-4">
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 dark:text-slate-100">
-                    {user.full_name ?? user.email}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{user.email}</p>
-                  {user.pending_shop_name && (
-                    <p className="text-sm text-primary-600 dark:text-primary-400 mt-1">
-                      ร้าน: <span className="font-medium">{user.pending_shop_name}</span>
-                      {user.pending_promptpay && (
-                        <span className="text-gray-400 dark:text-slate-500"> · {user.pending_promptpay}</span>
-                      )}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => handleReject(user.id)}
-                    disabled={actionLoading === user.id}
-                    className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-slate-600 hover:border-red-300 dark:hover:border-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
-                    title="ปฏิเสธ"
-                  >
-                    <X size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleApprove(user)}
-                    disabled={actionLoading === user.id}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    <Check size={14} />
-                    อนุมัติ
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* All Shops */}
       <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
