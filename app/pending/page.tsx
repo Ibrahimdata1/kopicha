@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, LogOut } from 'lucide-react'
+import { RefreshCw, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 
 export default function PendingPage() {
   const router = useRouter()
   const [shopName, setShopName] = useState('')
+  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -25,6 +26,24 @@ export default function PendingPage() {
     })
   }, [router])
 
+  const handleRetryLogin = async () => {
+    setChecking(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      if (profile?.role) {
+        router.push('/pos/sessions')
+        return
+      }
+    }
+    setChecking(false)
+  }
+
   const handleSignOut = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -35,24 +54,34 @@ export default function PendingPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-teal-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 px-4">
       <div className="w-full max-w-md">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-gray-200/60 dark:shadow-black/40 p-8 text-center border border-gray-100 dark:border-slate-700">
-          <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Clock size={36} className="text-amber-500 dark:text-amber-400" />
+          <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+            <RefreshCw size={36} className="text-primary-500 dark:text-primary-400" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-2 tracking-tight">
-            รอการอนุมัติ
+            กำลังตั้งค่าบัญชี
           </h1>
           {shopName && (
             <p className="text-primary-600 dark:text-primary-400 font-semibold mb-3">
               ร้าน: {shopName}
             </p>
           )}
-          <p className="text-gray-500 dark:text-slate-400 leading-relaxed mb-8 text-sm">
-            ระบบได้รับข้อมูลร้านค้าของคุณแล้ว
+          <p className="text-gray-500 dark:text-slate-400 leading-relaxed mb-6 text-sm">
+            ระบบกำลังตั้งค่าบัญชีของคุณ
             <br />
-            กรุณารอผู้ดูแลระบบอนุมัติบัญชี
-            <br />
-            ปกติใช้เวลา 1–24 ชั่วโมง
+            กรุณาลองเข้าสู่ระบบใหม่
           </p>
+          <button
+            onClick={handleRetryLogin}
+            disabled={checking}
+            className="w-full bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 rounded-xl transition-all shadow-md shadow-primary-500/25 disabled:opacity-50 mb-4"
+          >
+            {checking ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                กำลังตรวจสอบ...
+              </span>
+            ) : 'ลองเข้าสู่ระบบใหม่'}
+          </button>
           <button
             onClick={handleSignOut}
             className="flex items-center gap-2 mx-auto text-sm text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 transition-colors"

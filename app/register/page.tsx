@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { Coffee, Store, User, Mail, Lock, ArrowRight, ArrowLeft, Handshake } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
-  const [mode, setMode] = useState<'shop' | 'agent'>('shop')
+  const searchParams = useSearchParams()
+  const refCode = searchParams.get('ref') || ''
   const [step, setStep] = useState<'account' | 'shop'>('account')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -61,19 +62,12 @@ export default function RegisterPage() {
       const { data: result, error: rpcError } = await supabase.rpc('self_register_shop', {
         p_shop_name: shopName.trim(),
         p_promptpay: promptpay.trim(),
+        p_referral_code: refCode || null,
       })
-      if (rpcError) {
-        // Fallback to old flow if new RPC doesn't exist yet
-        await supabase.rpc('submit_owner_info', {
-          p_shop_name: shopName.trim(),
-          p_promptpay: promptpay.trim(),
-        })
-        router.push('/pending')
-        return
-      }
+      if (rpcError) throw rpcError
       if (result?.error) throw new Error(result.error)
 
-      router.push('/pos/tables')
+      router.push('/pos/sessions')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด'
       setError(msg)
@@ -87,11 +81,11 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-gray-200/60 dark:shadow-black/40 border border-slate-100 dark:border-slate-700 p-8">
           <div className="text-center mb-6">
-            <div className={`w-16 h-16 ${mode === 'shop' ? 'bg-primary-500' : 'bg-amber-500'} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg ${mode === 'shop' ? 'shadow-primary-500/30' : 'shadow-amber-500/30'}`}>
-              {mode === 'shop' ? <Coffee size={28} strokeWidth={2} className="text-white" /> : <Handshake size={28} strokeWidth={2} className="text-white" />}
+            <div className="w-16 h-16 bg-primary-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-500/30">
+              <Coffee size={28} strokeWidth={2} className="text-white" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-              {mode === 'shop' ? 'ลงทะเบียนร้านค้า' : 'สมัครเป็นตัวแทนขาย'}
+              ลงทะเบียนร้านค้า
             </h1>
           </div>
 

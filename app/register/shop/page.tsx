@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Coffee, Store } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 
 export default function RegisterShopPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const refCode = searchParams.get('ref') || ''
   const [shopName, setShopName] = useState('')
   const [promptpay, setPromptpay] = useState('')
   const [loading, setLoading] = useState(false)
@@ -36,12 +38,14 @@ export default function RegisterShopPage() {
     setError('')
     try {
       const supabase = createClient()
-      const { error: rpcErr } = await supabase.rpc('submit_owner_info', {
+      const { data: result, error: rpcErr } = await supabase.rpc('self_register_shop', {
         p_shop_name: shopName.trim(),
         p_promptpay: promptpay.trim(),
+        p_referral_code: refCode || null,
       })
       if (rpcErr) throw rpcErr
-      router.push('/pending')
+      if (result?.error) throw new Error(result.error)
+      router.push('/pos/sessions')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
@@ -62,7 +66,7 @@ export default function RegisterShopPage() {
             </h1>
             <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">{userEmail}</p>
             <p className="text-gray-400 dark:text-slate-500 text-xs mt-1">
-              กรอกข้อมูลร้านเพื่อส่งขออนุมัติ
+              กรอกข้อมูลร้านเพื่อเริ่มใช้งาน
             </p>
           </div>
 
@@ -113,16 +117,16 @@ export default function RegisterShopPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  กำลังส่งคำขอ...
+                  กำลังสร้างร้าน...
                 </span>
-              ) : 'ส่งคำขออนุมัติ'}
+              ) : 'เริ่มใช้งาน'}
             </button>
           </form>
 
           <div className="mt-5 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-sm text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/40">
-            <p className="font-medium mb-1">ขั้นตอนถัดไป</p>
+            <p className="font-medium mb-1">เริ่มต้นใช้งานทันที</p>
             <p className="text-blue-600 dark:text-blue-400 text-xs">
-              ผู้ดูแลระบบจะตรวจสอบและอนุมัติบัญชีของคุณ ปกติใช้เวลาไม่นาน
+              หลังกรอกข้อมูลเสร็จ คุณสามารถเริ่มใช้งานระบบได้เลย
             </p>
           </div>
         </div>

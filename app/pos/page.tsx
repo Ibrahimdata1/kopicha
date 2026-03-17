@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function PosPage() {
-  redirect('/pos/tables')
+  redirect('/pos/sessions')
 }
