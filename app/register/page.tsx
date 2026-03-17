@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { Coffee, Store, User, Mail, Lock, ArrowRight, ArrowLeft, Handshake, Phone, MessageCircle, Copy, Check, ExternalLink } from 'lucide-react'
+import { validatePromptPay } from '@/lib/validate-promptpay'
 
 export default function RegisterPage() {
   return (
@@ -65,12 +66,9 @@ function RegisterForm() {
     const pp = promptpay.trim()
     if (!name) { setError('กรุณากรอกชื่อร้าน'); return }
     if (name.length < 2 || name.length > 100) { setError('ชื่อร้านต้องมี 2-100 ตัวอักษร'); return }
-    if (!pp) { setError('กรุณากรอกหมายเลข PromptPay'); return }
     const ppDigits = pp.replace(/\D/g, '')
-    if (ppDigits.length !== 10 && ppDigits.length !== 13) {
-      setError('PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขนิติบุคคล 13 หลัก')
-      return
-    }
+    const ppError = validatePromptPay(ppDigits)
+    if (ppError) { setError(ppError); return }
     setLoading(true)
     setError('')
 
@@ -239,7 +237,7 @@ function RegisterForm() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">หมายเลข PromptPay (เบอร์โทร หรือ เลขประจำตัวผู้เสียภาษี)</label>
-                    <input type="text" value={promptpay} onChange={(e) => setPromptpay(e.target.value)} className="input" placeholder="0812345678" required />
+                    <input type="text" value={promptpay} onChange={(e) => setPromptpay(e.target.value.replace(/\D/g, ''))} inputMode="numeric" maxLength={13} className="input" placeholder="0812345678" required />
                   </div>
                   {refCode && (
                     <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm px-4 py-3 rounded-xl border border-amber-200 dark:border-amber-800/40">

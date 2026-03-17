@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
+import { validatePromptPay } from '@/lib/validate-promptpay'
 import {
   AlertCircle,
   Building2,
@@ -112,10 +113,8 @@ export default function AdminPage() {
     try {
       if (!profile?.id) throw new Error('ไม่พบโปรไฟล์')
       const digits = companyPromptpay.trim().replace(/\D/g, '')
-      if (!digits) throw new Error('กรุณากรอกหมายเลข PromptPay')
-      if (digits.length !== 10 && digits.length !== 13) {
-        throw new Error('PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขบัตรประชาชน/นิติบุคคล 13 หลัก')
-      }
+      const ppError = validatePromptPay(digits)
+      if (ppError) throw new Error(ppError)
       const { error: updateErr } = await supabase
         .from('profiles')
         .update({ pending_promptpay: digits })
@@ -286,7 +285,9 @@ export default function AdminPage() {
             <input
               type="text"
               value={companyPromptpay}
-              onChange={(e) => setCompanyPromptpay(e.target.value)}
+              onChange={(e) => setCompanyPromptpay(e.target.value.replace(/\D/g, ''))}
+              inputMode="numeric"
+              maxLength={13}
               className="input flex-1"
               placeholder="เบอร์โทร หรือ เลขบัตรประชาชน"
             />

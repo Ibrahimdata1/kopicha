@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
 import type { PendingUser, TeamMember } from '@/lib/types'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { validatePromptPay } from '@/lib/validate-promptpay'
 import {
   Camera,
   Check,
@@ -77,12 +78,9 @@ export default function SettingsPage() {
     const pp = promptpay.trim()
     if (!name || name.length < 2) { setError('ชื่อร้านต้องมีอย่างน้อย 2 ตัวอักษร'); return }
     if (name.length > 100) { setError('ชื่อร้านยาวเกินไป'); return }
-    if (!pp) { setError('กรุณากรอกหมายเลข PromptPay'); return }
     const ppDigits = pp.replace(/\D/g, '')
-    if (ppDigits.length !== 10 && ppDigits.length !== 13) {
-      setError('PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขนิติบุคคล 13 หลัก')
-      return
-    }
+    const ppError = validatePromptPay(ppDigits)
+    if (ppError) { setError(ppError); return }
     const tc = tableCount.trim() ? parseInt(tableCount.trim(), 10) : 0
     if (isNaN(tc) || tc < 0 || tc > 200) {
       setError('จำนวนโต๊ะต้องเป็นตัวเลข 0-200')
@@ -333,7 +331,9 @@ export default function SettingsPage() {
               <input
                 type="text"
                 value={promptpay}
-                onChange={(e) => setPromptpay(e.target.value)}
+                onChange={(e) => setPromptpay(e.target.value.replace(/\D/g, ''))}
+                inputMode="numeric"
+                maxLength={13}
                 className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
               />
             </div>
