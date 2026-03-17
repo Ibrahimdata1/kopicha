@@ -219,9 +219,8 @@ export default function AdminPage() {
   }
 
   const getShopStatus = (shop: ShopRow): { label: string; color: string } => {
-    if (shop.is_deleted) return { label: 'Deleted', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' }
-    if (shop.owner?.role !== 'owner') return { label: 'Deactivated', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' }
-    return { label: 'Active', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' }
+    if (shop.is_deleted) return { label: 'ถูกลบ', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' }
+    return { label: 'ใช้งาน', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' }
   }
 
   if (loading) {
