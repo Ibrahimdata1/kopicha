@@ -12,8 +12,6 @@ import {
   Save,
   Settings,
   ShieldAlert,
-  ShieldOff,
-  ShieldCheck,
   Store,
   Trash2,
   Users,
@@ -150,70 +148,6 @@ export default function AdminPage() {
       )
       showSuccess(`ตั้งวันหมดอายุร้าน "${shopName}" เป็น ${dateStr}`)
       setDateInputs((prev) => ({ ...prev, [shopId]: '' }))
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleDeactivateOwner = async (ownerId: string, shopId: string, shopName: string) => {
-    const ok = await confirm({
-      title: `ยกเลิกสิทธิ์ร้าน "${shopName}"?`,
-      message: 'Owner ของร้านนี้และ Cashier ทั้งหมดจะเข้าร้านนี้ไม่ได้ (ร้านอื่นของ Owner ไม่โดนผลกระทบ)',
-      confirmLabel: 'ยกเลิกสิทธิ์',
-      danger: true,
-    })
-    if (!ok) return
-    setError('')
-    setActionLoading(ownerId)
-    try {
-      // Deactivate owner for THIS shop only (set shop_id=null, role stays owner if they have other shops)
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ shop_id: null, role: null })
-        .eq('id', ownerId)
-        .eq('shop_id', shopId)
-      if (updateErr) throw updateErr
-      // Deactivate all cashiers in this shop
-      await supabase.from('profiles').update({ role: null }).eq('shop_id', shopId).eq('role', 'cashier')
-      setShops((prev) =>
-        prev.map((s) =>
-          s.owner?.id === ownerId ? { ...s, owner: { ...s.owner!, role: null } } : s
-        )
-      )
-      showSuccess('ยกเลิกสิทธิ์เรียบร้อย')
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleReactivateOwner = async (ownerId: string, shopId: string, shopName: string) => {
-    const ok = await confirm({
-      title: `อนุมัติกลับร้าน "${shopName}"?`,
-      message: 'Owner จะกลับเข้าร้านนี้ได้ และ Cashier ทั้งหมดจะ active อัตโนมัติ',
-      confirmLabel: 'อนุมัติกลับ',
-    })
-    if (!ok) return
-    setError('')
-    setActionLoading(ownerId)
-    try {
-      // Reactivate owner — set role=owner and link back to this shop
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ role: 'owner', shop_id: shopId })
-        .eq('id', ownerId)
-      if (updateErr) throw updateErr
-      // Reactivate all cashiers in this shop
-      await supabase.from('profiles').update({ role: 'cashier' }).eq('shop_id', shopId).is('role', null)
-      setShops((prev) =>
-        prev.map((s) =>
-          s.owner?.id === ownerId ? { ...s, owner: { ...s.owner!, role: 'owner' } } : s
-        )
-      )
-      showSuccess('อนุมัติกลับเรียบร้อย')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
@@ -396,7 +330,6 @@ export default function AdminPage() {
             }).map((shop) => {
               const status = getShopStatus(shop)
               const isDeleted = !!shop.is_deleted
-              const isDeactivated = shop.owner?.role !== 'owner' && !isDeleted
 
               return (
                 <div
@@ -469,29 +402,6 @@ export default function AdminPage() {
                         ตั้งวันหมดอายุ
                       </button>
                     </div>
-
-                    {/* Deactivate / Reactivate */}
-                    {shop.owner && !isDeleted ? (
-                      shop.owner.role === 'owner' ? (
-                        <button
-                          onClick={() => handleDeactivateOwner(shop.owner!.id, shop.id, shop.name)}
-                          disabled={actionLoading === shop.owner.id}
-                          className="text-xs px-3 py-1.5 border border-orange-200 dark:border-orange-700/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
-                        >
-                          <ShieldOff size={13} />
-                          ยกเลิกสิทธิ์
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleReactivateOwner(shop.owner!.id, shop.id, shop.name)}
-                          disabled={actionLoading === shop.owner.id}
-                          className="text-xs px-3 py-1.5 border border-blue-200 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
-                        >
-                          <ShieldCheck size={13} />
-                          อนุมัติกลับ
-                        </button>
-                      )
-                    ) : null}
 
                     {/* Soft Delete / Undelete */}
                     {isDeleted ? (
