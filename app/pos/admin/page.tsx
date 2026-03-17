@@ -52,29 +52,12 @@ export default function AdminPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Load all shops
-      const { data: shopsData } = await supabase
-        .from('shops')
-        .select('id, name, promptpay_id, subscription_paid_until, created_at')
-        .order('created_at', { ascending: false })
-
-      // Load all owners
-      const { data: owners } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, role, shop_id')
-        .eq('role', 'owner')
-
-      // Merge
-      const ownerByShop: Record<string, ShopRow['owner']> = {}
-      for (const o of owners ?? []) {
-        if (o.shop_id) ownerByShop[o.shop_id] = o
+      // Load shops via server API (bypasses RLS)
+      const res = await fetch('/api/admin/shops')
+      if (res.ok) {
+        const { shops: shopsData } = await res.json()
+        setShops(shopsData ?? [])
       }
-
-      const enriched: ShopRow[] = (shopsData ?? []).map((s) => ({
-        ...s,
-        owner: ownerByShop[s.id] ?? null,
-      }))
-      setShops(enriched)
 
       // Load company PromptPay from super admin profile
       const { data: adminProfile } = await supabase
@@ -115,7 +98,7 @@ export default function AdminPage() {
     setError('')
     setActionLoading(ownerId)
     try {
-      await supabase.from('profiles').update({ role: null, shop_id: null }).eq('id', ownerId)
+      await adminAction('deactivate', { ownerId })
       setSuccessMsg('ยกเลิกสิทธิ์เรียบร้อย')
       setTimeout(() => setSuccessMsg(''), 3000)
       await loadData()
@@ -126,16 +109,24 @@ export default function AdminPage() {
     }
   }
 
+  const adminAction = async (action: string, params: Record<string, string>) => {
+    const res = await fetch('/api/admin/shops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...params }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด')
+    return data
+  }
+
   const handleDeleteShop = async (shopId: string, shopName: string) => {
     const ok = await confirm({ title: `ลบร้าน "${shopName}"?`, message: 'ข้อมูลสินค้า หมวดหมู่ และทีมงานจะถูกลบทั้งหมด', confirmLabel: 'ลบร้าน', danger: true })
     if (!ok) return
     setError('')
     setActionLoading(shopId)
     try {
-      // Remove all owners from this shop first
-      await supabase.from('profiles').update({ role: null, shop_id: null }).eq('shop_id', shopId).eq('role', 'owner')
-      await supabase.from('profiles').update({ shop_id: null }).eq('shop_id', shopId).eq('role', 'cashier')
-      await supabase.from('shops').delete().eq('id', shopId)
+      await adminAction('delete', { shopId })
       setShops((prev) => prev.filter((s) => s.id !== shopId))
       setSuccessMsg('ลบร้านเรียบร้อย')
       setTimeout(() => setSuccessMsg(''), 3000)
@@ -152,23 +143,11 @@ export default function AdminPage() {
     setActionLoading(shopId)
     setError('')
     try {
-      const shop = shops.find((s) => s.id === shopId)
-      const baseDate = shop?.subscription_paid_until
-        ? new Date(Math.max(new Date(shop.subscription_paid_until).getTime(), Date.now()))
-        : new Date()
-      baseDate.setDate(baseDate.getDate() + 30)
-      const newDate = baseDate.toISOString().slice(0, 10)
-
-      const { error: updateErr } = await supabase
-        .from('shops')
-        .update({ subscription_paid_until: newDate })
-        .eq('id', shopId)
-      if (updateErr) throw updateErr
-
+      const data = await adminAction('extend', { shopId })
       setShops((prev) =>
-        prev.map((s) => (s.id === shopId ? { ...s, subscription_paid_until: newDate } : s))
+        prev.map((s) => (s.id === shopId ? { ...s, subscription_paid_until: data.newDate } : s))
       )
-      setSuccessMsg(`ต่ออายุร้าน "${shopName}" ถึง ${newDate}`)
+      setSuccessMsg(`ต่ออายุร้าน "${shopName}" ถึง ${data.newDate}`)
       setTimeout(() => setSuccessMsg(''), 3000)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
