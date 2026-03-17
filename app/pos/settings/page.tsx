@@ -225,6 +225,59 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Subscription Status */}
+      {isOwner && shop && (
+        <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={16} className="text-gray-400 dark:text-slate-500" />
+            <h2 className="font-bold text-gray-900 dark:text-slate-100">สถานะการใช้งาน</h2>
+          </div>
+          {(() => {
+            const now = new Date()
+            const firstProduct = shop.first_product_at ? new Date(shop.first_product_at) : null
+            const trialEnd = firstProduct ? new Date(firstProduct.getTime() + 7 * 24 * 60 * 60 * 1000) : null
+            const isInTrial = !shop.setup_fee_paid && trialEnd && trialEnd > now
+            const subDate = shop.subscription_paid_until ? new Date(shop.subscription_paid_until) : null
+            const subExpired = subDate && subDate < now
+
+            return (
+              <div className="space-y-2">
+                {/* Trial status */}
+                {!shop.setup_fee_paid && !firstProduct && (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                    <span className="text-sm text-blue-700 dark:text-blue-300">ทดลองใช้ฟรี 7 วัน — เริ่มนับหลังสร้างสินค้าชิ้นแรก</span>
+                  </div>
+                )}
+                {isInTrial && trialEnd && (
+                  <div className="flex items-center justify-between px-4 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                    <span className="text-sm text-amber-700 dark:text-amber-300">ทดลองใช้ฟรี</span>
+                    <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                      หมดอายุ {trialEnd.toLocaleDateString('en-GB')} (เหลือ {Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))} วัน)
+                    </span>
+                  </div>
+                )}
+                {/* Subscription status */}
+                {shop.setup_fee_paid && subDate && (
+                  <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${subExpired ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'}`}>
+                    <span className={`text-sm ${subExpired ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>
+                      {subExpired ? 'หมดอายุแล้ว' : 'สมาชิก'}
+                    </span>
+                    <span className={`text-sm font-semibold ${subExpired ? 'text-red-800 dark:text-red-200' : 'text-green-800 dark:text-green-200'}`}>
+                      ถึง {subDate.toLocaleDateString('en-GB')}
+                    </span>
+                  </div>
+                )}
+                {shop.setup_fee_paid && !subDate && (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                    <span className="text-sm text-gray-600 dark:text-slate-300">ยังไม่ได้ตั้งวันหมดอายุ</span>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+        </section>
+      )}
+
       {/* Shop Settings */}
       {(isOwner || isSuperAdmin) && shop && (
         <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
