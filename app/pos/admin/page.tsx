@@ -166,8 +166,8 @@ export default function AdminPage() {
     setError('')
     setActionLoading(shopId)
     try {
-      // Deactivate only cashiers in this shop (owner ไม่โดน)
-      await supabase.from('profiles').update({ role: null }).eq('shop_id', shopId).eq('role', 'cashier')
+      // Deactivate everyone in this shop (owner + cashier)
+      await supabase.from('profiles').update({ role: null }).eq('shop_id', shopId)
       // Soft delete shop
       const { error: updateErr } = await supabase
         .from('shops')
@@ -203,7 +203,13 @@ export default function AdminPage() {
         .update({ is_deleted: false, deleted_at: null })
         .eq('id', shopId)
       if (updateErr) throw updateErr
-      // Auto reactivate cashiers ที่โดน deactivate ตอนลบร้าน
+      // Find shop owner_id to reactivate correctly
+      const { data: shopData } = await supabase.from('shops').select('owner_id').eq('id', shopId).single()
+      if (shopData?.owner_id) {
+        // Reactivate owner
+        await supabase.from('profiles').update({ role: 'owner' }).eq('id', shopData.owner_id).is('role', null)
+      }
+      // Reactivate cashiers (everyone else with this shop_id and null role)
       await supabase.from('profiles').update({ role: 'cashier' }).eq('shop_id', shopId).is('role', null)
       setShops((prev) =>
         prev.map((s) =>
