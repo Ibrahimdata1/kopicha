@@ -41,9 +41,6 @@ export default async function RootPage() {
             <span className="font-bold text-lg tracking-tight text-gray-900 dark:text-slate-100">QRforPay</span>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/partner" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition hidden sm:block">
-              ตัวแทนขาย
-            </Link>
             <Link href="/login" className="text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition">
               เข้าสู่ระบบ
             </Link>
