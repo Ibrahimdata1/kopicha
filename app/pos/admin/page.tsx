@@ -47,6 +47,7 @@ export default function AdminPage() {
   const [companyPromptpay, setCompanyPromptpay] = useState('')
   const [savingConfig, setSavingConfig] = useState(false)
   const [dateInputs, setDateInputs] = useState<Record<string, string>>({})
+  const [search, setSearch] = useState('')
   const { confirm, ConfirmDialogUI } = useConfirm()
 
   useEffect(() => {
@@ -345,14 +346,33 @@ export default function AdminPage() {
           </h2>
         </div>
 
-        {shops.length === 0 ? (
+        {/* Search */}
+        <div className="px-6 py-3 border-b border-gray-100 dark:border-slate-700">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder:text-gray-400"
+            placeholder="ค้นหาร้านค้า..."
+          />
+        </div>
+
+        {shops.filter(s => {
+          if (!search.trim()) return true
+          const q = search.toLowerCase()
+          return s.name.toLowerCase().includes(q) || s.owner?.email?.toLowerCase().includes(q) || s.owner?.full_name?.toLowerCase().includes(q) || s.promptpay_id?.includes(q)
+        }).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-slate-500 gap-2">
             <Building2 size={32} strokeWidth={1.5} />
             <p className="text-sm">ยังไม่มีร้านค้า</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-slate-700">
-            {shops.map((shop) => {
+            {shops.filter(s => {
+              if (!search.trim()) return true
+              const q = search.toLowerCase()
+              return s.name.toLowerCase().includes(q) || s.owner?.email?.toLowerCase().includes(q) || s.owner?.full_name?.toLowerCase().includes(q) || s.promptpay_id?.includes(q)
+            }).map((shop) => {
               const status = getShopStatus(shop)
               const isDeleted = !!shop.is_deleted
               const isDeactivated = shop.owner?.role !== 'owner' && !isDeleted
@@ -387,7 +407,7 @@ export default function AdminPage() {
                       )}
                       <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
                         PromptPay: {shop.promptpay_id || '-'} · สร้าง{' '}
-                        {new Date(shop.created_at).toLocaleDateString('th-TH')}
+                        {new Date(shop.created_at).toLocaleDateString('en-GB')}
                       </p>
                       <p
                         className={`text-xs mt-0.5 ${
@@ -399,7 +419,7 @@ export default function AdminPage() {
                       >
                         สมาชิก:{' '}
                         {shop.subscription_paid_until
-                          ? `ถึง ${new Date(shop.subscription_paid_until).toLocaleDateString('th-TH')}`
+                          ? `ถึง ${new Date(shop.subscription_paid_until).toLocaleDateString('en-GB')}`
                           : 'ยังไม่เปิดใช้'}
                       </p>
                     </div>
@@ -429,7 +449,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* Deactivate / Reactivate */}
-                    {shop.owner && !isDeleted && (
+                    {shop.owner && !isDeleted ? (
                       shop.owner.role === 'owner' ? (
                         <button
                           onClick={() => handleDeactivateOwner(shop.owner!.id, shop.name)}
@@ -449,7 +469,7 @@ export default function AdminPage() {
                           อนุมัติกลับ
                         </button>
                       )
-                    )}
+                    ) : null}
 
                     {/* Soft Delete / Undelete */}
                     {isDeleted ? (
