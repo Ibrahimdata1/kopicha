@@ -221,13 +221,13 @@ function RegisterForm() {
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                       <Mail size={13} className="inline mr-1.5 text-slate-400" />อีเมล
                     </label>
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="your@email.com" required />
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="your@email.com" maxLength={100} required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                       <Lock size={13} className="inline mr-1.5 text-slate-400" />รหัสผ่าน
                     </label>
-                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" placeholder="อย่างน้อย 8 ตัว มีตัวเลขด้วย" required />
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" placeholder="อย่างน้อย 8 ตัว มีตัวเลขด้วย" maxLength={100} required />
                   </div>
                   {error && <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl border border-red-100 dark:border-red-800/40">{error}</div>}
                   <button type="submit" className="btn-primary w-full py-3">ถัดไป <ArrowRight size={16} /></button>

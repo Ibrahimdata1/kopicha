@@ -38,7 +38,7 @@ export default function SettingsPage() {
   const [shopSaved, setShopSaved] = useState(false)
 
   const [cashierName, setCashierName] = useState('')
-  const [cashierEmail, setCashierEmail] = useState('')
+  const [cashierUsername, setCashierUsername] = useState('')
   const [cashierPassword, setCashierPassword] = useState('')
   const [isCreatingCashier, setIsCreatingCashier] = useState(false)
   const [cashierMsg, setCashierMsg] = useState('')
@@ -107,23 +107,25 @@ export default function SettingsPage() {
   const handleCreateCashier = async (e: React.FormEvent) => {
     e.preventDefault()
     const name = cashierName.trim()
-    const em = cashierEmail.trim().toLowerCase()
+    const uname = cashierUsername.trim().toLowerCase()
     const pw = cashierPassword
     if (!name || name.length < 2) { setError('กรุณากรอกชื่อพนักงาน (อย่างน้อย 2 ตัว)'); return }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setError('รูปแบบอีเมลไม่ถูกต้อง'); return }
+    if (!/^[a-z0-9_]{3,30}$/.test(uname)) { setError('ชื่อผู้ใช้ต้องมี 3-30 ตัว (a-z, 0-9, _ เท่านั้น)'); return }
     if (pw.length < 8) { setError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
     if (!/[0-9]/.test(pw)) { setError('รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว'); return }
+    const shopId = shop?.id ?? ''
+    const fakeEmail = `${uname}@${shopId.slice(0, 8)}.cashier`
     setIsCreatingCashier(true)
     setCashierMsg('')
     setError('')
     try {
       const { data, error: fnErr } = await supabase.functions.invoke('create-cashier', {
-        body: { full_name: name, email: em, password: pw },
+        body: { full_name: name, email: fakeEmail, password: pw },
       })
       if (fnErr || data?.error) throw new Error(fnErr?.message ?? data?.error ?? 'เกิดข้อผิดพลาด')
-      setCashierMsg('สร้างบัญชีพนักงานสำเร็จ')
+      setCashierMsg(`สร้างสำเร็จ! Username: ${uname} Password: ${pw}`)
       setCashierName('')
-      setCashierEmail('')
+      setCashierUsername('')
       setCashierPassword('')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
@@ -404,14 +406,17 @@ export default function SettingsPage() {
             <h2 className="font-bold text-gray-900 dark:text-slate-100">ทีมงาน</h2>
           </div>
           <div className="divide-y divide-gray-100 dark:divide-slate-700 mb-5 -mx-6">
-            {team.map((member) => (
+            {team.map((member) => {
+              const isCashierMember = member.role === 'cashier'
+              const cashierDisplayUsername = isCashierMember && member.email ? member.email.split('@')[0] : null
+              return (
               <div key={member.id} className="flex items-center justify-between px-6 py-3">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-slate-100">
                     {member.full_name ?? member.email}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-slate-400">
-                    {ROLE_LABEL[member.role ?? ''] ?? member.role} · {member.email}
+                    {ROLE_LABEL[member.role ?? ''] ?? member.role}{cashierDisplayUsername ? ` · @${cashierDisplayUsername}` : ` · ${member.email}`}
                   </p>
                 </div>
                 {member.id !== profile?.id && (
@@ -423,8 +428,9 @@ export default function SettingsPage() {
                   </button>
                 )}
               </div>
-            ))}
+            )})}
           </div>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mb-5 -mt-3 px-6">รหัสผ่านจะแสดงครั้งเดียวตอนสร้าง กรุณาจดไว้</p>
 
           <div className="flex items-center gap-2 mb-3">
             <UserPlus size={15} className="text-gray-400 dark:text-slate-500" />
@@ -439,22 +445,27 @@ export default function SettingsPage() {
               className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
             />
-            <input
-              type="email"
-              value={cashierEmail}
-              onChange={(e) => setCashierEmail(e.target.value)}
-              placeholder="อีเมล"
-              className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
+            <div>
+              <input
+                type="text"
+                value={cashierUsername}
+                onChange={(e) => setCashierUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                placeholder="ชื่อผู้ใช้ เช่น somchai, cashier1"
+                maxLength={30}
+                className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">a-z, 0-9, _ เท่านั้น (ใช้สำหรับเข้าสู่ระบบ)</p>
+            </div>
             <input
               type="password"
               value={cashierPassword}
               onChange={(e) => setCashierPassword(e.target.value)}
-              placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)"
+              placeholder="รหัสผ่าน (อย่างน้อย 8 ตัว มีตัวเลข)"
+              maxLength={100}
               className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
-              minLength={6}
+              minLength={8}
             />
             {cashierMsg && (
               <p className="text-green-600 dark:text-green-400 text-sm flex items-center gap-1.5">
