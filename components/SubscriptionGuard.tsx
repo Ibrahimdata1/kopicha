@@ -27,9 +27,9 @@ function getDaysOverdue(shop: Shop | null): number {
 }
 
 function getTrialDaysLeft(shop: Shop | null): number {
-  if (!shop?.created_at) return 0
-  const created = new Date(shop.created_at)
-  const expiry = new Date(created.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
+  if (!shop?.first_product_at) return -1 // -1 means no trial started (unlimited)
+  const firstProduct = new Date(shop.first_product_at)
+  const expiry = new Date(firstProduct.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
   const now = new Date()
   const diff = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
   return Math.max(0, diff)
@@ -65,7 +65,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
 
   const daysOverdue = getDaysOverdue(shop)
   const trialDaysLeft = getTrialDaysLeft(shop)
-  const trialExpired = !setupFeePaid && trialDaysLeft <= 0
+  const trialExpired = !setupFeePaid && trialDaysLeft >= 0 && trialDaysLeft <= 0
   const isBlocked = daysOverdue >= 3
   const needsReminder = daysOverdue > 0 && !isBlocked
 
@@ -268,7 +268,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   return (
     <>
       {/* Trial banner — show remaining days */}
-      {!setupFeePaid && trialDaysLeft > 0 && trialDaysLeft <= 3 && (
+      {!setupFeePaid && trialDaysLeft >= 1 && trialDaysLeft <= 3 && (
         <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/40 px-4 py-2.5 text-center">
           <p className="text-sm text-amber-800 dark:text-amber-200">
             <Clock size={14} className="inline mr-1" />

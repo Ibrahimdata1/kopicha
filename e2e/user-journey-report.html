@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QRforPay - E2E User Flow Report</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1e3a5f, #0d9488, #059669); color: white; padding: 48px 24px; text-align: center; }
+  .header h1 { font-size: 2.2rem; margin-bottom: 8px; letter-spacing: -0.5px; }
+  .header .sub { opacity: 0.85; font-size: 1.05rem; margin-bottom: 16px; }
+  .header .tags { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .header .tag { background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 999px; font-size: 0.82rem; font-weight: 600; backdrop-filter: blur(4px); }
+  .header .tag.green { background: #22c55e; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+
+  /* TOC */
+  .toc { background: white; border-radius: 16px; padding: 28px; margin-bottom: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .toc h2 { font-size: 1.2rem; color: #1e40af; margin-bottom: 16px; }
+  .toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .toc-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.9rem; cursor: pointer; }
+  .toc-item:hover { color: #2563eb; }
+  .toc-num { width: 40px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.75rem; font-weight: 700; color: white; flex-shrink: 0; }
+
+  /* Roles table */
+  .roles { background: white; border-radius: 16px; padding: 28px; margin-bottom: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .roles h2 { font-size: 1.1rem; color: #1e40af; margin-bottom: 14px; }
+  .roles table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .roles th { text-align: left; padding: 10px 12px; background: #eff6ff; color: #1e40af; font-weight: 600; }
+  .roles td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+
+  /* Order lifecycle */
+  .lifecycle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  .lifecycle .status-box { padding: 8px 16px; border-radius: 10px; font-size: 0.82rem; font-weight: 700; color: white; text-align: center; line-height: 1.3; }
+  .lifecycle .arrow-r { color: #94a3b8; font-size: 1.2rem; }
+
+  /* Scenario card */
+  .scenario { background: white; border-radius: 16px; margin-bottom: 32px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+  .scenario-header { padding: 24px 28px 16px; border-bottom: 1px solid #f1f5f9; }
+  .scenario-header h2 { font-size: 1.3rem; color: #1e40af; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+  .scenario-header .s-num { font-size: 0.85rem; padding: 4px 10px; border-radius: 8px; color: white; font-weight: 700; }
+  .scenario-header .desc { font-size: 0.9rem; color: #64748b; margin-top: 4px; }
+  .scenario-header .precond { margin-top: 12px; padding: 10px 16px; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 0 8px 8px 0; font-size: 0.85rem; color: #1e40af; font-weight: 500; }
+
+  .scenario-body { padding: 24px 28px; }
+
+  /* Steps */
+  .step-row { display: flex; gap: 20px; margin-bottom: 20px; align-items: flex-start; }
+  .step-row:last-child { margin-bottom: 0; }
+  .step-num { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 0.85rem; flex-shrink: 0; margin-top: 2px; }
+  .step-content { flex: 1; }
+  .step-content h4 { font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+  .step-content p { font-size: 0.85rem; color: #64748b; line-height: 1.5; }
+  .step-content .tech { font-size: 0.78rem; color: #94a3b8; font-style: italic; margin-top: 2px; }
+
+  /* Screenshot area */
+  .screenshots { margin-top: 20px; padding-top: 20px; border-top: 1px solid #f1f5f9; }
+  .screenshots h4 { font-size: 0.85rem; color: #64748b; font-weight: 600; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .ss-grid { display: grid; gap: 16px; }
+  .ss-grid.cols-1 { grid-template-columns: 1fr; }
+  .ss-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .ss-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .ss-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .ss-card { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; transition: box-shadow 0.2s; }
+  .ss-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+  .ss-card img { width: 100%; display: block; cursor: pointer; }
+  .ss-card .ss-label { padding: 8px 12px; background: #f8fafc; font-size: 0.78rem; color: #475569; font-weight: 500; text-align: center; border-top: 1px solid #f1f5f9; }
+
+  /* Flow arrow between steps */
+  .flow-down { display: flex; justify-content: flex-start; padding: 4px 0 4px 14px; }
+  .flow-down svg { color: #cbd5e1; }
+
+  /* Branch / split */
+  .branch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .branch-box { padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; }
+  .branch-box h5 { font-size: 0.85rem; font-weight: 700; margin-bottom: 8px; padding: 4px 12px; border-radius: 6px; display: inline-block; color: white; }
+  .branch-box p { font-size: 0.82rem; color: #64748b; line-height: 1.5; }
+
+  /* Note box */
+  .note { margin-top: 16px; padding: 12px 16px; border-radius: 10px; font-size: 0.82rem; line-height: 1.5; }
+  .note.info { background: #eff6ff; color: #1e40af; border-left: 4px solid #3b82f6; }
+  .note.warn { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+  .note.success { background: #dcfce7; color: #166534; border-left: 4px solid #22c55e; }
+
+  /* Full system flow */
+  .system-flow { background: white; border-radius: 16px; padding: 28px; margin-bottom: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .system-flow h2 { font-size: 1.2rem; color: #1e40af; margin-bottom: 20px; }
+  .flow-section { margin-bottom: 16px; }
+  .flow-section .flow-label { font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .flow-boxes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .flow-box { padding: 8px 14px; border-radius: 10px; font-size: 0.82rem; font-weight: 600; color: white; }
+  .flow-arrow { color: #94a3b8; font-size: 1rem; }
+
+  /* Color palette */
+  .bg-blue { background: #2563eb; }
+  .bg-green { background: #16a34a; }
+  .bg-purple { background: #7c3aed; }
+  .bg-orange { background: #ea580c; }
+  .bg-red { background: #dc2626; }
+  .bg-teal { background: #0d9488; }
+  .bg-amber { background: #d97706; }
+  .bg-pink { background: #db2777; }
+  .bg-indigo { background: #4f46e5; }
+  .bg-cyan { background: #0891b2; }
+  .bg-emerald { background: #059669; }
+  .bg-slate { background: #475569; }
+
+  /* Lightbox */
+  .lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.88); z-index: 1000; justify-content: center; align-items: center; cursor: pointer; }
+  .lightbox.active { display: flex; }
+  .lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .lightbox .close-hint { position: fixed; top: 16px; right: 20px; color: white; font-size: 0.85rem; opacity: 0.6; }
+
+  /* Status badge */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+  .badge.pass { background: #dcfce7; color: #16a34a; }
+  .badge.need-auth { background: #fef3c7; color: #92400e; }
+
+  @media (max-width: 768px) {
+    .toc-grid { grid-template-columns: 1fr; }
+    .ss-grid.cols-2, .ss-grid.cols-3, .ss-grid.cols-4 { grid-template-columns: 1fr 1fr; }
+    .branch-grid { grid-template-columns: 1fr; }
+    .step-row { flex-direction: column; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═════════════════ HEADER ═════════════════ -->
+<div class="header">
+  <h1>E2E User Flow</h1>
+  <div class="sub">QRforPay POS — ทุก Scenario จาก Codebase จริง + Screenshot</div>
+  <div class="tags">
+    <div class="tag">Next.js + Supabase + PromptPay QR</div>
+    <div class="tag">12 Scenarios | 4 User Roles</div>
+    <div class="tag green">29 E2E Tests Passed</div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ═════════════════ TOC ═════════════════ -->
+<div class="toc">
+  <h2>สารบัญ — All E2E Scenarios</h2>
+  <div class="toc-grid">
+    <a class="toc-item" href="#s01"><span class="toc-num bg-blue">S-01</span> Owner สมัครร้านใหม่ (First-time Setup)</a>
+    <a class="toc-item" href="#s07"><span class="toc-num bg-pink">S-07</span> ลูกค้าสั่งเพิ่ม (Multi-Order)</a>
+    <a class="toc-item" href="#s02"><span class="toc-num bg-green">S-02</span> Super Admin อนุมัติร้าน</a>
+    <a class="toc-item" href="#s08"><span class="toc-num bg-cyan">S-08</span> แคชเชียร์รับออเดอร์ + จัดการครัว</a>
+    <a class="toc-item" href="#s03"><span class="toc-num bg-purple">S-03</span> Owner ตั้งค่าร้าน + เพิ่มพนักงาน</a>
+    <a class="toc-item" href="#s09"><span class="toc-num bg-indigo">S-09</span> แคชเชียร์สั่งแทนลูกค้า (POS Order)</a>
+    <a class="toc-item" href="#s04"><span class="toc-num bg-orange">S-04</span> Owner จัดการสินค้า + เมนู</a>
+    <a class="toc-item" href="#s10"><span class="toc-num bg-red">S-10</span> แคชเชียร์ยกเลิกรายการ/ออเดอร์</a>
+    <a class="toc-item" href="#s05"><span class="toc-num bg-teal">S-05</span> ลูกค้าสั่งอาหารเอง (Self-Order QR)</a>
+    <a class="toc-item" href="#s11"><span class="toc-num bg-slate">S-11</span> จัดการโต๊ะ + ย้ายโต๊ะ</a>
+    <a class="toc-item" href="#s06"><span class="toc-num bg-amber">S-06</span> ลูกค้าจ่ายเงิน PromptPay QR</a>
+    <a class="toc-item" href="#s12"><span class="toc-num bg-emerald">S-12</span> Owner ดู Dashboard + รายงาน</a>
+  </div>
+</div>
+
+<!-- ═════════════════ ROLES ═════════════════ -->
+<div class="roles">
+  <h2>ระบบ Roles & สิทธิ์</h2>
+  <table>
+    <thead><tr><th>Role</th><th>เข้าถึง</th><th>สิทธิ์หลัก</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Customer (anon)</strong></td><td>หน้าเว็บ /order</td><td>ดูเมนู, สั่งอาหาร, จ่ายเงิน (ผ่าน RLS anon)</td></tr>
+      <tr><td><strong>Cashier</strong></td><td>POS ทุกแท็บ</td><td>ดูข้อมูลทั้งหมด + สร้าง/อัพเดทออเดอร์ + รับเงิน</td></tr>
+      <tr><td><strong>Owner</strong></td><td>POS ทุกแท็บ</td><td>เหมือน Cashier + CRUD สินค้า/หมวดหมู่ + จัดการทีม + ตั้งค่าร้าน</td></tr>
+      <tr><td><strong>Super Admin</strong></td><td>Settings + Admin</td><td>อนุมัติร้านใหม่ (pending owners)</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:20px;">Order Status Lifecycle</h2>
+  <div class="lifecycle">
+    <div class="status-box" style="background:#f59e0b;">pending<br><span style="font-weight:400;font-size:0.72rem;">สร้างแล้ว รอครัว</span></div>
+    <span class="arrow-r">&rarr;</span>
+    <div class="status-box" style="background:#3b82f6;">preparing<br><span style="font-weight:400;font-size:0.72rem;">ครัวกำลังทำ</span></div>
+    <span class="arrow-r">&rarr;</span>
+    <div class="status-box" style="background:#8b5cf6;">ready<br><span style="font-weight:400;font-size:0.72rem;">พร้อมเสิร์ฟ</span></div>
+    <span class="arrow-r">&rarr;</span>
+    <div class="status-box" style="background:#22c55e;">completed<br><span style="font-weight:400;font-size:0.72rem;">จ่ายเงินแล้ว</span></div>
+    <span style="color:#94a3b8;margin:0 8px;">|</span>
+    <div class="status-box" style="background:#ef4444;">cancelled<br><span style="font-weight:400;font-size:0.72rem;">ยกเลิก</span></div>
+  </div>
+</div>
+
+<!-- ═════════════════ FULL SYSTEM FLOW ═════════════════ -->
+<div class="system-flow">
+  <h2>ภาพรวม Full System Flow</h2>
+
+  <div class="flow-section">
+    <div class="flow-label" style="color:#2563eb;">SETUP (ครั้งเดียว)</div>
+    <div class="flow-boxes">
+      <div class="flow-box bg-blue">S-01 สมัครร้าน</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-green">S-02 Admin อนุมัติ</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-purple">S-03 ตั้งค่า+ทีม</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-orange">S-04 เพิ่มสินค้า</div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <div class="flow-label" style="color:#0d9488;">CUSTOMER FLOW (ทุกวัน)</div>
+    <div class="flow-boxes">
+      <div class="flow-box bg-teal">S-05 สแกน+สั่ง</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-amber">S-06 จ่ายเงิน QR</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-pink">S-07 สั่งเพิ่ม</div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <div class="flow-label" style="color:#dc2626;">POS FLOW (ทุกวัน)</div>
+    <div class="flow-boxes">
+      <div class="flow-box bg-cyan">S-08 รับออเดอร์+ครัว</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-indigo">S-09 สั่งแทน</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-red">S-10 ยกเลิก</div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <div class="flow-label" style="color:#475569;">MANAGEMENT (ประจำ)</div>
+    <div class="flow-boxes">
+      <div class="flow-box bg-slate">S-11 จัดการโต๊ะ</div><span class="flow-arrow">&rarr;</span>
+      <div class="flow-box bg-emerald">S-12 Dashboard+รายงาน</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-01: Owner สมัครร้านใหม่ -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s01">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-blue">S-01</span> Owner สมัครร้านใหม่ (First-time Setup)</h2>
+    <div class="desc">เจ้าของร้านอาหารต้องการเปิดใช้ระบบ QRforPay ครั้งแรก</div>
+    <div class="precond">Precondition: ยังไม่มี account ในระบบ</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-blue">1</div>
+      <div class="step-content">
+        <h4>เปิดหน้าเว็บ QRforPay</h4>
+        <p>เห็นหน้า Landing พร้อม Hero, Features, Pricing และปุ่ม "ทดลองฟรี 7 วัน" + "สมัครเลย"</p>
+        <div class="tech">Route: / (app/page.tsx)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-blue">2</div>
+      <div class="step-content">
+        <h4>กดสมัคร → หน้า Register Step 1</h4>
+        <p>กรอก ชื่อ-นามสกุล + อีเมล + รหัสผ่าน (8+ ตัว มีตัวเลข) กด "ถัดไป"</p>
+        <div class="tech">Validation: minLength 8, ต้องมีตัวเลข 1 ตัว</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-blue">3</div>
+      <div class="step-content">
+        <h4>Register Step 2 — ข้อมูลร้านค้า</h4>
+        <p>กรอก "ชื่อร้าน" + "PromptPay ID" (เบอร์โทร 10 หลัก หรือ เลขนิติบุคคล 13 หลัก)</p>
+        <div class="tech">Route: /register (app/register/page.tsx)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-blue">4</div>
+      <div class="step-content">
+        <h4>กด "สมัครสมาชิก"</h4>
+        <p>supabase.auth.signUp() → self_register_shop RPC → สร้าง shop + profile ทันที</p>
+        <div class="tech">DB: INSERT shops + UPDATE profiles (role='owner', shop_id=ใหม่)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-blue">5</div>
+      <div class="step-content">
+        <h4>Redirect → เข้าระบบ POS ทันที</h4>
+        <p>Redirect ไป /pos/tables (instant activation) หรือ /pending (ถ้า RPC ล้มเหลว)</p>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-01 Owner Registration Flow</h4>
+      <div class="ss-grid cols-3">
+        <div class="ss-card"><img src="screenshots/01-landing-hero.png" onclick="openLB(this)"><div class="ss-label">1. Landing Page — เห็นเว็บครั้งแรก</div></div>
+        <div class="ss-card"><img src="screenshots/02-register-step1-empty.png" onclick="openLB(this)"><div class="ss-label">2. Register Step 1 (ว่าง)</div></div>
+        <div class="ss-card"><img src="screenshots/02-register-step1-filled.png" onclick="openLB(this)"><div class="ss-label">3. Register Step 1 (กรอกแล้ว)</div></div>
+        <div class="ss-card"><img src="screenshots/02-register-step2-empty.png" onclick="openLB(this)"><div class="ss-label">4. Register Step 2 (ว่าง)</div></div>
+        <div class="ss-card"><img src="screenshots/02-register-step2-filled.png" onclick="openLB(this)"><div class="ss-label">5. Register Step 2 (กรอกแล้ว)</div></div>
+        <div class="ss-card"><img src="screenshots/08-pending-page.png" onclick="openLB(this)"><div class="ss-label">6. Pending Page (ถ้ารอ approve)</div></div>
+      </div>
+      <div class="ss-grid cols-2" style="margin-top:12px;">
+        <div class="ss-card"><img src="screenshots/02-register-validation-password.png" onclick="openLB(this)"><div class="ss-label">Validation: รหัสผ่านสั้นเกินไป</div></div>
+        <div class="ss-card"><img src="screenshots/02-register-validation-nodigit.png" onclick="openLB(this)"><div class="ss-label">Validation: ไม่มีตัวเลข</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-02: Super Admin อนุมัติร้าน -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s02">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-green">S-02</span> Super Admin อนุมัติร้าน</h2>
+    <div class="desc">Super Admin ตรวจสอบและอนุมัติร้านใหม่ที่สมัครเข้ามา</div>
+    <div class="precond">Precondition: มี pending owner อย่างน้อย 1 คน (จาก S-01)</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-green">1</div>
+      <div class="step-content">
+        <h4>Super Admin Login</h4>
+        <p>Login → ระบบตรวจ role = 'super_admin' → Redirect ไป /pos/settings</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-green">2</div>
+      <div class="step-content">
+        <h4>เห็นรายชื่อ Pending Users</h4>
+        <p>รายการ Owner ที่รอการอนุมัติ แสดง: email, ชื่อร้าน (pending), เลข PromptPay</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-green">3</div>
+      <div class="step-content">
+        <h4>กดอนุมัติ</h4>
+        <p>approveOwner() → สร้าง row ใน shops table + อัพเดท profiles: role = 'owner', shop_id = ใหม่</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-green">4</div>
+      <div class="step-content">
+        <h4>Owner เข้าระบบได้ทันที</h4>
+        <p>Owner refresh/re-login → profile.role = 'owner' → Redirect ไป /pos/sessions</p>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-02 Admin Flow</h4>
+      <div class="ss-grid cols-2">
+        <div class="ss-card"><img src="screenshots/03-login-empty.png" onclick="openLB(this)"><div class="ss-label">1. Admin Login Page</div></div>
+        <div class="ss-card"><img src="screenshots/07-protected-settings.png" onclick="openLB(this)"><div class="ss-label">2. Settings (ต้อง login ก่อน)</div></div>
+      </div>
+      <div class="note info" style="margin-top:12px;">หมายเหตุ: หน้า Admin Panel ต้อง login ด้วย super_admin account ถึงจะเห็นรายชื่อ pending users</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-03: Owner ตั้งค่าร้าน -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s03">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-purple">S-03</span> Owner ตั้งค่าร้าน + เพิ่มพนักงาน</h2>
+    <div class="desc">หลังร้านได้รับอนุมัติ Owner ตั้งค่าร้านให้พร้อมใช้งาน</div>
+    <div class="precond">Precondition: Owner login แล้ว, ร้านอนุมัติแล้ว (S-02 เสร็จ)</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-purple">1</div>
+      <div class="step-content">
+        <h4>ไปแท็บ "ตั้งค่า"</h4>
+        <p>เห็น: ชื่อร้าน, เลข PromptPay, จำนวนโต๊ะ (default: 10)</p>
+        <div class="tech">Route: /pos/settings</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-purple">2</div>
+      <div class="step-content">
+        <h4>แก้ไขข้อมูลร้าน</h4>
+        <p>แก้ชื่อร้าน / PromptPay ID / จำนวนโต๊ะ (1-200) → กด "บันทึก"</p>
+        <div class="tech">DB: UPDATE shops SET name, promptpay_id, table_count</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-purple">3</div>
+      <div class="step-content">
+        <h4>เพิ่ม Cashier (พนักงาน)</h4>
+        <p>กรอก: ชื่อ-นามสกุล, Email, Password → กด "สร้าง Cashier"</p>
+        <div class="tech">Action: Supabase Edge Function → auth.users + profiles (role='cashier')</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-purple">4</div>
+      <div class="step-content">
+        <h4>ดูรายชื่อทีม</h4>
+        <p>แสดงสมาชิกทั้งหมดในร้าน: email, ชื่อ, role — Owner สามารถลบสมาชิกได้</p>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-03 Settings</h4>
+      <div class="ss-grid cols-1">
+        <div class="ss-card"><img src="screenshots/07-protected-settings.png" onclick="openLB(this)"><div class="ss-label">Settings Page (ต้อง login ด้วย Owner account)</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-04: Owner จัดการสินค้า -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s04">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-orange">S-04</span> Owner จัดการสินค้า + เมนู</h2>
+    <div class="desc">เพิ่ม/แก้ไข/ลบ/จัดลำดับสินค้าในร้าน</div>
+    <div class="precond">Precondition: Owner login, ร้านตั้งค่าแล้ว</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-orange">1</div>
+      <div class="step-content">
+        <h4>ไปแท็บ "สินค้า"</h4>
+        <p>แสดงรายการสินค้าทั้งหมด — ค้นหาได้ — สีบอกสถานะสต็อก (แดง=หมด, ส้ม=ใกล้หมด≤5, น้ำเงิน≤20)</p>
+        <div class="tech">Route: /pos/products</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-orange">2</div>
+      <div class="step-content">
+        <h4>เพิ่มสินค้าใหม่</h4>
+        <p>กดปุ่ม "+" → Modal form: ชื่อ, ราคา, หมวดหมู่, จำนวนสต็อก, รูปภาพ → บันทึก</p>
+        <div class="tech">DB: INSERT products</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-orange">3</div>
+      <div class="step-content">
+        <h4>แก้ไข / ลบสินค้า</h4>
+        <p>กดที่สินค้า → Modal เดิม (pre-filled) → แก้ข้อมูล → บันทึก | ลบ → Soft delete (is_active = false)</p>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-04 Products</h4>
+      <div class="ss-grid cols-1">
+        <div class="ss-card"><img src="screenshots/07-protected-products.png" onclick="openLB(this)"><div class="ss-label">Products Page (ต้อง login ด้วย Owner account)</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-05: ลูกค้าสั่งอาหารเอง -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s05">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-teal">S-05</span> ลูกค้าสั่งอาหารเอง (Self-Order via QR)</h2>
+    <div class="desc">Flow หลักของระบบ — ลูกค้านั่งโต๊ะ สแกน QR สั่งอาหารเอง ไม่ต้องเรียกพนักงาน</div>
+    <div class="precond">Precondition: ร้านมีสินค้าในระบบแล้ว + QR Code ติดบนโต๊ะ</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-teal">1</div>
+      <div class="step-content">
+        <h4>สแกน QR Code บนโต๊ะ</h4>
+        <p>ลูกค้าเปิดกล้องมือถือ → สแกน → เปิด browser อัตโนมัติ</p>
+        <div class="tech">URL: /order?session={customer_session_uuid}</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-teal">2</div>
+      <div class="step-content">
+        <h4>โหลดหน้าเมนูร้าน</h4>
+        <p>ระบบสร้าง customerSessionRef (UUID) → โหลด shop info + categories + products ผ่าน anon Supabase client</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-teal">3</div>
+      <div class="step-content">
+        <h4>เลือกเมนู + เพิ่มลงตะกร้า</h4>
+        <p>กดเลือกหมวดหมู่ (อาหาร, เครื่องดื่ม) → กด "+" เพิ่มจำนวน → ยอดรวมที่ด้านล่าง</p>
+        <div class="tech">State: localStorage cart (CART_KEY per session)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-teal">4</div>
+      <div class="step-content">
+        <h4>ตรวจสอบตะกร้า + กดยืนยันออเดอร์</h4>
+        <p>เห็นรายการทั้งหมด + ราคารวม — แก้จำนวน ลบ หรือเพิ่มได้ → กด "ยืนยัน"</p>
+        <div class="tech">DB: INSERT orders (status=pending) + order_items + payments (status=pending)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-teal">5</div>
+      <div class="step-content">
+        <h4>ออเดอร์ส่งสำเร็จ → POS ได้รับ realtime</h4>
+        <p>แสดงหน้า success → ตะกร้าถูกล้าง → POS ได้รับแจ้งเตือน realtime ทันที</p>
+        <div class="tech">Supabase Realtime broadcast → POS orders page</div>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-05 Customer Order</h4>
+      <div class="ss-grid cols-2">
+        <div class="ss-card"><img src="screenshots/05-order-no-session.png" onclick="openLB(this)"><div class="ss-label">เปิดหน้า Order ไม่มี session</div></div>
+        <div class="ss-card"><img src="screenshots/05-order-invalid-session.png" onclick="openLB(this)"><div class="ss-label">เปิดด้วย session ไม่ถูกต้อง</div></div>
+      </div>
+      <div class="note info" style="margin-top:12px;">ต้องมี session UUID จริง (จาก QR Code บนโต๊ะ) ถึงจะเห็นเมนูร้าน — ถ้าไม่มีจะแสดง error ป้องกันการเข้าถึงโดยไม่สแกน QR</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-06: ลูกค้าจ่ายเงิน PromptPay QR -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s06">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-amber">S-06</span> ลูกค้าจ่ายเงิน PromptPay QR</h2>
+    <div class="desc">หลังสั่งอาหารแล้ว ลูกค้าจ่ายเงินผ่าน QR PromptPay ของร้าน</div>
+    <div class="precond">Precondition: ลูกค้าสั่งอาหารแล้ว (S-05 เสร็จ step 5)</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-amber">1</div>
+      <div class="step-content">
+        <h4>กด "ชำระเงิน"</h4>
+        <p>ลูกค้ากดปุ่มจ่ายเงินในหน้า customer</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-amber">2</div>
+      <div class="step-content">
+        <h4>ระบบสร้าง PromptPay QR</h4>
+        <p>EMV QR payload ตามมาตรฐาน BOT: Merchant ID (เบอร์/เลขภาษี) + จำนวนเงิน + CRC16 checksum</p>
+        <div class="tech">lib/qr.ts → generatePromptPayQR(promptpayId, amount)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-amber">3</div>
+      <div class="step-content">
+        <h4>แสดง QR Code + รอการชำระ</h4>
+        <p>หน้าจอแสดง QR PromptPay + ยอดเงิน + สถานะ "รอการชำระเงิน..." + countdown 5 นาที</p>
+      </div>
+    </div>
+
+    <div class="branch-grid">
+      <div class="branch-box">
+        <h5 style="background:#2563eb;">กรณี A: Auto Confirm</h5>
+        <p><strong>5a.</strong> Supabase Realtime ตรวจจับ payments.status = 'success' → auto completeOrder()</p>
+        <p><strong>6a.</strong> หน้าจอเปลี่ยนเป็น ✓ สำเร็จ → ออเดอร์ badge: <span style="background:#2563eb;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;">Auto</span></p>
+      </div>
+      <div class="branch-box">
+        <h5 style="background:#ea580c;">กรณี B: Manual Confirm</h5>
+        <p><strong>5b.</strong> แคชเชียร์กดยืนยัน → POS ฝั่งแคชเชียร์ กดปุ่ม "ยืนยันรับเงินแล้ว" → Dialog confirm</p>
+        <p><strong>6b.</strong> ออเดอร์ badge: <span style="background:#ea580c;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;">Manual + ชื่อ</span></p>
+      </div>
+    </div>
+
+    <div class="note warn" style="margin-top:12px;">Timeout: ถ้า 5 นาทีไม่มีการจ่าย → QR หมดอายุ → ลูกค้าเลือก "สร้าง QR ใหม่" หรือ "ยกเลิก"</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-07: ลูกค้าสั่งเพิ่ม -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s07">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-pink">S-07</span> ลูกค้าสั่งเพิ่ม (Multi-Order บนโต๊ะเดียว)</h2>
+    <div class="desc">ลูกค้าสั่งอาหารรอบ 2, 3 บนโต๊ะเดิม — ระบบรองรับหลาย order ต่อโต๊ะ</div>
+    <div class="precond">Precondition: ลูกค้าสั่งไปแล้ว 1 ออเดอร์ (S-05 เสร็จ)</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-pink">1</div>
+      <div class="step-content">
+        <h4>อยู่หน้าเมนูเดิม (session ยังอยู่)</h4>
+        <p>ตะกร้าว่าง แต่ confirmedItems แสดงออเดอร์ก่อนหน้า + สถานะครัว (realtime)</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-pink">2</div>
+      <div class="step-content">
+        <h4>เลือกเมนูเพิ่ม + ยืนยัน</h4>
+        <p>กดเพิ่มรายการใหม่ลงตะกร้า → กดสั่ง → ระบบสร้าง order_id ใหม่ + order_number ใหม่ บนโต๊ะเดิม</p>
+        <div class="tech">DB: new row in orders (same table_number, same customer_session_id)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-pink">3</div>
+      <div class="step-content">
+        <h4>POS เห็นออเดอร์ใหม่ realtime</h4>
+        <p>หน้าออเดอร์ POS มีรายการใหม่ดังขึ้น (highlight 8 วินาที + vibrate)</p>
+      </div>
+    </div>
+
+    <div class="note info">Bill Merging Rule: เมนูเดียวกันจากหลายออเดอร์ ต้องรวมเป็นบรรทัดเดียว เพิ่มจำนวน ห้ามซ้ำ (merge by product_id)</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-08: แคชเชียร์รับออเดอร์ -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s08">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-cyan">S-08</span> แคชเชียร์รับออเดอร์ + จัดการครัว</h2>
+    <div class="desc">ออเดอร์เข้ามา → แคชเชียร์อัพเดทสถานะจนเสร็จ</div>
+    <div class="precond">Precondition: มีออเดอร์ pending เข้ามา (จาก S-05 หรือ S-09)</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-cyan">1</div>
+      <div class="step-content">
+        <h4>แจ้งเตือนออเดอร์ใหม่</h4>
+        <p>Realtime subscription ตรวจจับ order ใหม่ → สั่น (Vibration) + Toast banner "ออเดอร์ #XX โต๊ะ Y"</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-cyan">2</div>
+      <div class="step-content">
+        <h4>ดูรายละเอียดออเดอร์</h4>
+        <p>แท็บ "ออเดอร์" → Active tab → เห็น order card: เลขออเดอร์, โต๊ะ, รายการ, ยอดเงิน, สถานะ payment</p>
+        <div class="tech">Route: /pos/orders — Active Orders Tab</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-cyan">3</div>
+      <div class="step-content">
+        <h4>กด "กำลังทำ" → กด "พร้อมเสิร์ฟ"</h4>
+        <p>pending → <span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;">preparing</span> → <span style="background:#8b5cf6;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;">ready</span> — ลูกค้าเห็น realtime</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-cyan">4</div>
+      <div class="step-content">
+        <h4>ยืนยัน Payment + Complete</h4>
+        <p>QR: กด "ยืนยันรับเงินแล้ว" (manual) หรือ auto detect | เงินสด: กรอกจำนวนเงินรับ → คำนวณเงินทอน</p>
+        <p style="margin-top:4px;"><span style="background:#22c55e;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;">completed</span> — Order จบ</p>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-08 Orders</h4>
+      <div class="ss-grid cols-1">
+        <div class="ss-card"><img src="screenshots/07-protected-orders.png" onclick="openLB(this)"><div class="ss-label">Orders Page (ต้อง login ด้วย Cashier/Owner account)</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-09: แคชเชียร์สั่งแทนลูกค้า -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s09">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-indigo">S-09</span> แคชเชียร์สั่งแทนลูกค้า (POS Order)</h2>
+    <div class="desc">ลูกค้าบอกปากเปล่า → แคชเชียร์กดสั่งให้ผ่านหน้าจอ POS</div>
+    <div class="precond">Precondition: Cashier/Owner login แล้ว</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-indigo">1</div>
+      <div class="step-content">
+        <h4>ไปแท็บ "สินค้า" หรือ หน้า POS</h4>
+        <p>เห็นรายการสินค้าทั้งหมด — กดเพิ่มสินค้าที่ลูกค้าต้องการ</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-indigo">2</div>
+      <div class="step-content">
+        <h4>ตรวจสอบตะกร้า</h4>
+        <p>Cart screen: ดูรายการ + ราคา + ใส่ส่วนลด (% หรือ บาท) + เลือกเลขโต๊ะ</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-indigo">3</div>
+      <div class="step-content">
+        <h4>เลือกวิธีจ่าย</h4>
+        <div class="branch-grid" style="margin-top:8px;">
+          <div class="branch-box">
+            <h5 style="background:#0891b2;">ทางเลือก A: QR PromptPay</h5>
+            <p>กด "จ่ายด้วย QR" → แสดง QR ให้ลูกค้าสแกน → รอ confirm (auto/manual)</p>
+          </div>
+          <div class="branch-box">
+            <h5 style="background:#059669;">ทางเลือก B: เงินสด</h5>
+            <p>กด "จ่ายเงินสด" → กรอก "เงินที่รับ" → ระบบคำนวณเงินทอน → ยืนยัน</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note info" style="margin-top:16px;">ทางเลือก C: บันทึกไว้ก่อน (Save as Pending) — สร้าง order status=pending โดยยังไม่จ่ายเงิน → ครัวเริ่มทำได้เลย → จ่ายทีหลัง</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-10: ยกเลิกรายการ/ออเดอร์ -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s10">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-red">S-10</span> แคชเชียร์ยกเลิกรายการ / ยกเลิกออเดอร์</h2>
+    <div class="desc">2 ระดับ: ยกเลิกรายเมนู (item-level) หรือยกเลิกทั้งออเดอร์</div>
+    <div class="precond">Precondition: มีออเดอร์ในระบบ</div>
+  </div>
+  <div class="scenario-body">
+    <div class="branch-grid">
+      <div class="branch-box">
+        <h5 style="background:#f59e0b;">กรณี A: ยกเลิกรายเมนู</h5>
+        <p><strong>1.</strong> กดดูรายละเอียดออเดอร์ → เปิด Detail Modal → เห็นทุก item</p>
+        <p><strong>2.</strong> กดปุ่มยกเลิกข้าง item → confirm dialog</p>
+        <p><strong>3.</strong> ระบบคำนวณยอดใหม่ (เฉพาะ active items)</p>
+        <p><strong>4.</strong> ถ้าทุกรายการถูกยกเลิก → ยกเลิกทั้งออเดอร์อัตโนมัติ</p>
+        <p style="margin-top:4px;font-size:0.78rem;color:#92400e;">DB: order_items.item_status='cancelled', item_cancelled_by, item_cancelled_at</p>
+      </div>
+      <div class="branch-box">
+        <h5 style="background:#dc2626;">กรณี B: ยกเลิกทั้งออเดอร์</h5>
+        <p><strong>1.</strong> เปิด Detail Modal ของออเดอร์</p>
+        <p><strong>2.</strong> กด "ยกเลิกออเดอร์" → confirm dialog</p>
+        <p><strong>3.</strong> ออเดอร์ย้ายไป History tab สถานะ <span style="background:#ef4444;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;">cancelled</span></p>
+        <p style="margin-top:4px;font-size:0.78rem;color:#92400e;">DB: orders.status='cancelled', cancelled_at, cancelled_by | payments.status='failed'</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-11: จัดการโต๊ะ -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s11">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-slate">S-11</span> จัดการโต๊ะ + ย้ายโต๊ะ</h2>
+    <div class="desc">ดูสถานะโต๊ะทั้งร้าน แชร์ QR ให้ลูกค้า ย้ายออเดอร์ไปโต๊ะอื่น</div>
+    <div class="precond">Precondition: Cashier/Owner login, มีโต๊ะตั้งค่าแล้ว</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-slate">1</div>
+      <div class="step-content">
+        <h4>ไปแท็บ "โต๊ะ"</h4>
+        <p>แสดง Grid ปุ่มเลขโต๊ะ 1..N — สีบอกสถานะ: 🟢 ว่าง 🟠 มีออเดอร์</p>
+        <div class="tech">Route: /pos/tables — สถานะ derive จาก active customer_sessions</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-slate">2</div>
+      <div class="step-content">
+        <h4>กดเลือกโต๊ะ → ดูรายละเอียด</h4>
+        <p>Detail Panel: ออเดอร์ทั้งหมดของโต๊ะ (combined view) + QR Code + ปุ่ม action</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-slate">3</div>
+      <div class="step-content">
+        <h4>แชร์ QR / Copy URL</h4>
+        <p>"แชร์ QR" → Screenshot + native Share API | "Copy URL" → clipboard</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-slate">4</div>
+      <div class="step-content">
+        <h4>ย้ายโต๊ะ</h4>
+        <p>กด "ย้ายโต๊ะ" → Modal เลือกโต๊ะปลายทาง → ยืนยัน → อัพเดท table_number ของทุก active order</p>
+        <div class="tech">DB: UPDATE orders SET table_number WHERE table_number=old AND status IN (pending, preparing, ready)</div>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-11 Tables</h4>
+      <div class="ss-grid cols-1">
+        <div class="ss-card"><img src="screenshots/07-protected-tables.png" onclick="openLB(this)"><div class="ss-label">Tables Page (ต้อง login ด้วย Cashier/Owner account)</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- S-12: Dashboard + รายงาน -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario" id="s12">
+  <div class="scenario-header">
+    <h2><span class="s-num bg-emerald">S-12</span> Owner ดู Dashboard + รายงาน</h2>
+    <div class="desc">เจ้าของร้านดูสรุปยอดขายและประสิทธิภาพร้าน</div>
+    <div class="precond">Precondition: Owner login, มีออเดอร์ในระบบ</div>
+  </div>
+  <div class="scenario-body">
+    <div class="step-row">
+      <div class="step-num bg-emerald">1</div>
+      <div class="step-content">
+        <h4>ไปแท็บ "แดชบอร์ด"</h4>
+        <p>แสดงข้อมูลวันนี้: ยอดขายรวม (เฉพาะ completed), จำนวนออเดอร์, ยอดเฉลี่ยต่อออเดอร์</p>
+        <div class="tech">Route: /pos/dashboard — data from completed orders (by completed_at)</div>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-emerald">2</div>
+      <div class="step-content">
+        <h4>ดูสินค้าขายดี Top 5</h4>
+        <p>แสดง 5 อันดับสินค้าที่ขายได้มากที่สุด (นับ qty) — ช่วยตัดสินใจเมนู</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-emerald">3</div>
+      <div class="step-content">
+        <h4>เลือกช่วงเวลา</h4>
+        <p>วันนี้ / 7 วัน / เดือนนี้ — สลับดูข้อมูลย้อนหลัง</p>
+      </div>
+    </div>
+    <div class="flow-down"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+    <div class="step-row">
+      <div class="step-num bg-emerald">4</div>
+      <div class="step-content">
+        <h4>ดูประวัติออเดอร์ (History)</h4>
+        <p>แท็บ "ออเดอร์" → History tab → กรอง: วันนี้/เมื่อวาน/7วัน/30วัน + สถานะ: completed/cancelled</p>
+      </div>
+    </div>
+
+    <div class="screenshots">
+      <h4>Screenshots — S-12 Dashboard</h4>
+      <div class="ss-grid cols-1">
+        <div class="ss-card"><img src="screenshots/07-protected-dashboard.png" onclick="openLB(this)"><div class="ss-label">Dashboard Page (ต้อง login ด้วย Owner account)</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- Navigation & Mobile -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="scenario">
+  <div class="scenario-header">
+    <h2><span class="s-num" style="background:#6366f1;">+</span> Navigation + Partner + Mobile Responsive</h2>
+    <div class="desc">การนำทางระหว่างหน้า, สมัครตัวแทนขาย, และ Mobile responsive</div>
+  </div>
+  <div class="scenario-body">
+    <div class="screenshots">
+      <h4>Navigation Flow</h4>
+      <div class="ss-grid cols-3">
+        <div class="ss-card"><img src="screenshots/06-nav-landing-to-login.png" onclick="openLB(this)"><div class="ss-label">Landing → Login</div></div>
+        <div class="ss-card"><img src="screenshots/06-nav-landing-to-register.png" onclick="openLB(this)"><div class="ss-label">Landing → Register</div></div>
+        <div class="ss-card"><img src="screenshots/06-nav-login-to-register.png" onclick="openLB(this)"><div class="ss-label">Login → Register</div></div>
+        <div class="ss-card"><img src="screenshots/06-nav-register-to-login.png" onclick="openLB(this)"><div class="ss-label">Register → Login</div></div>
+        <div class="ss-card"><img src="screenshots/06-nav-landing-to-partner.png" onclick="openLB(this)"><div class="ss-label">Landing → Partner</div></div>
+        <div class="ss-card"><img src="screenshots/03-login-error.png" onclick="openLB(this)"><div class="ss-label">Login Error (ข้อมูลผิด)</div></div>
+      </div>
+    </div>
+
+    <div class="screenshots" style="margin-top:24px;">
+      <h4>Partner (ตัวแทนขาย)</h4>
+      <div class="ss-grid cols-2">
+        <div class="ss-card"><img src="screenshots/04-partner-page.png" onclick="openLB(this)"><div class="ss-label">Partner Page (ว่าง)</div></div>
+        <div class="ss-card"><img src="screenshots/04-partner-filled.png" onclick="openLB(this)"><div class="ss-label">Partner (กรอกข้อมูลแล้ว)</div></div>
+      </div>
+    </div>
+
+    <div class="screenshots" style="margin-top:24px;">
+      <h4>Mobile Responsive (iPhone X — 375x812)</h4>
+      <div class="ss-grid cols-4">
+        <div class="ss-card"><img src="screenshots/09-mobile-landing.png" onclick="openLB(this)"><div class="ss-label">Landing</div></div>
+        <div class="ss-card"><img src="screenshots/09-mobile-login.png" onclick="openLB(this)"><div class="ss-label">Login</div></div>
+        <div class="ss-card"><img src="screenshots/09-mobile-register.png" onclick="openLB(this)"><div class="ss-label">Register</div></div>
+        <div class="ss-card"><img src="screenshots/09-mobile-partner.png" onclick="openLB(this)"><div class="ss-label">Partner</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;padding:32px 0;color:#94a3b8;font-size:0.82rem;">
+  QRforPay E2E User Flow v1.0 | March 2026<br>
+  29 Playwright Tests Passed | 32 Screenshots Captured<br>
+  Tech: Next.js 15 + Supabase + PromptPay EMV QR
+</div>
+
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lb" onclick="closeLB()">
+  <div class="close-hint">Click / ESC to close</div>
+  <img id="lb-img" src="">
+</div>
+
+<script>
+function openLB(el){document.getElementById('lb-img').src=el.src;document.getElementById('lb').classList.add('active');}
+function closeLB(){document.getElementById('lb').classList.remove('active');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLB();});
+// Smooth scroll for TOC
+document.querySelectorAll('.toc-item').forEach(a=>{a.addEventListener('click',e=>{e.preventDefault();document.querySelector(a.getAttribute('href')).scrollIntoView({behavior:'smooth',block:'start'});});});
+</script>
+</body>
+</html>

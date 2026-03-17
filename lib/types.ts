@@ -11,6 +11,9 @@ export interface Shop {
   address?: string
   phone?: string
   logo_url?: string
+  is_deleted?: boolean
+  deleted_at?: string | null
+  first_product_at?: string | null
   created_at: string
 }
 

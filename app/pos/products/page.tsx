@@ -155,6 +155,14 @@ export default function ProductsPage() {
       } else {
         const { error: insertErr } = await supabase.from('products').insert(payload)
         if (insertErr) throw insertErr
+
+        // Track first product creation for trial start
+        if (!shop.first_product_at) {
+          await supabase
+            .from('shops')
+            .update({ first_product_at: new Date().toISOString() })
+            .eq('id', shop.id)
+        }
       }
       setShowForm(false)
       fetchData()

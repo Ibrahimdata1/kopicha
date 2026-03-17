@@ -6,11 +6,14 @@ import { usePosContext } from '@/lib/pos-context'
 import {
   AlertCircle,
   Building2,
-  CalendarPlus,
+  Calendar,
   Check,
+  RotateCcw,
   Save,
   Settings,
   ShieldAlert,
+  ShieldOff,
+  ShieldCheck,
   Store,
   Trash2,
   Users,
@@ -23,13 +26,14 @@ interface ShopRow {
   promptpay_id: string
   subscription_paid_until: string | null
   created_at: string
+  is_deleted?: boolean
+  deleted_at?: string | null
   owner?: {
     id: string
     full_name: string | null
     email: string | null
     role: string | null
   } | null
-  order_count?: number
 }
 
 export default function AdminPage() {
@@ -42,6 +46,7 @@ export default function AdminPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [companyPromptpay, setCompanyPromptpay] = useState('')
   const [savingConfig, setSavingConfig] = useState(false)
+  const [dateInputs, setDateInputs] = useState<Record<string, string>>({})
   const { confirm, ConfirmDialogUI } = useConfirm()
 
   useEffect(() => {
@@ -52,12 +57,37 @@ export default function AdminPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Load shops via server API (bypasses RLS)
-      const res = await fetch('/api/admin/shops')
-      if (res.ok) {
-        const { shops: shopsData } = await res.json()
-        setShops(shopsData ?? [])
+      // Load all shops directly via supabase (RLS allows super_admin)
+      const { data: shopsData } = await supabase
+        .from('shops')
+        .select('id, name, promptpay_id, subscription_paid_until, created_at, is_deleted, deleted_at')
+        .order('created_at', { ascending: false })
+
+      // Load owners
+      const { data: owners } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role, shop_id')
+        .in('role', ['owner'])
+
+      // Also load deactivated owners (role is null but have shop_id)
+      const { data: deactivated } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role, shop_id')
+        .is('role', null)
+        .not('shop_id', 'is', null)
+
+      const allOwners = [...(owners ?? []), ...(deactivated ?? [])]
+      const ownerByShop: Record<string, ShopRow['owner']> = {}
+      for (const o of allOwners) {
+        if (o.shop_id) ownerByShop[o.shop_id] = o
       }
+
+      const enriched: ShopRow[] = (shopsData ?? []).map((shop) => ({
+        ...shop,
+        owner: ownerByShop[shop.id] ?? null,
+      }))
+
+      setShops(enriched)
 
       // Load company PromptPay from super admin profile
       const { data: adminProfile } = await supabase
@@ -72,19 +102,22 @@ export default function AdminPage() {
     }
   }
 
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg)
+    setTimeout(() => setSuccessMsg(''), 3000)
+  }
+
   const handleSaveConfig = async () => {
     setSavingConfig(true)
     setError('')
     try {
-      const res = await fetch('/api/admin/update-promptpay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ promptpay: companyPromptpay }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด')
-      setSuccessMsg('บันทึก PromptPay รับเงินเรียบร้อย')
-      setTimeout(() => setSuccessMsg(''), 3000)
+      if (!profile?.id) throw new Error('ไม่พบโปรไฟล์')
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ pending_promptpay: companyPromptpay.trim() })
+        .eq('id', profile.id)
+      if (updateErr) throw updateErr
+      showSuccess('บันทึก PromptPay รับเงินเรียบร้อย')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
@@ -92,68 +125,147 @@ export default function AdminPage() {
     }
   }
 
+  const handleSetSubscriptionDate = async (shopId: string, shopName: string) => {
+    const dateStr = dateInputs[shopId]
+    if (!dateStr) { setError('กรุณาเลือกวันที่'); return }
+    setActionLoading(shopId)
+    setError('')
+    try {
+      const { error: updateErr } = await supabase
+        .from('shops')
+        .update({ subscription_paid_until: dateStr })
+        .eq('id', shopId)
+      if (updateErr) throw updateErr
+      setShops((prev) =>
+        prev.map((s) => (s.id === shopId ? { ...s, subscription_paid_until: dateStr } : s))
+      )
+      showSuccess(`ตั้งวันหมดอายุร้าน "${shopName}" เป็น ${dateStr}`)
+      setDateInputs((prev) => ({ ...prev, [shopId]: '' }))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const handleDeactivateOwner = async (ownerId: string, shopName: string) => {
-    const ok = await confirm({ title: `ยกเลิกสิทธิ์ร้าน "${shopName}"?`, message: 'ผู้ใช้จะเข้าระบบไม่ได้จนกว่าจะอนุมัติใหม่', confirmLabel: 'ยกเลิกสิทธิ์', danger: true })
+    const ok = await confirm({
+      title: `ยกเลิกสิทธิ์ร้าน "${shopName}"?`,
+      message: 'ผู้ใช้จะเข้าระบบไม่ได้จนกว่าจะอนุมัติใหม่',
+      confirmLabel: 'ยกเลิกสิทธิ์',
+      danger: true,
+    })
     if (!ok) return
     setError('')
     setActionLoading(ownerId)
     try {
-      await adminAction('deactivate', { ownerId })
-      setSuccessMsg('ยกเลิกสิทธิ์เรียบร้อย')
-      setTimeout(() => setSuccessMsg(''), 3000)
-      await loadData()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const adminAction = async (action: string, params: Record<string, string>) => {
-    const res = await fetch('/api/admin/shops', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, ...params }),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด')
-    return data
-  }
-
-  const handleDeleteShop = async (shopId: string, shopName: string) => {
-    const ok = await confirm({ title: `ลบร้าน "${shopName}"?`, message: 'ข้อมูลสินค้า หมวดหมู่ และทีมงานจะถูกลบทั้งหมด', confirmLabel: 'ลบร้าน', danger: true })
-    if (!ok) return
-    setError('')
-    setActionLoading(shopId)
-    try {
-      await adminAction('delete', { shopId })
-      setShops((prev) => prev.filter((s) => s.id !== shopId))
-      setSuccessMsg('ลบร้านเรียบร้อย')
-      setTimeout(() => setSuccessMsg(''), 3000)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleExtendSubscription = async (shopId: string, shopName: string) => {
-    const ok = await confirm({ title: `ต่ออายุร้าน "${shopName}" 30 วัน?`, confirmLabel: 'ต่ออายุ' })
-    if (!ok) return
-    setActionLoading(shopId)
-    setError('')
-    try {
-      const data = await adminAction('extend', { shopId })
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ role: null })
+        .eq('id', ownerId)
+      if (updateErr) throw updateErr
       setShops((prev) =>
-        prev.map((s) => (s.id === shopId ? { ...s, subscription_paid_until: data.newDate } : s))
+        prev.map((s) =>
+          s.owner?.id === ownerId ? { ...s, owner: { ...s.owner!, role: null } } : s
+        )
       )
-      setSuccessMsg(`ต่ออายุร้าน "${shopName}" ถึง ${data.newDate}`)
-      setTimeout(() => setSuccessMsg(''), 3000)
+      showSuccess('ยกเลิกสิทธิ์เรียบร้อย')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
       setActionLoading(null)
     }
+  }
+
+  const handleReactivateOwner = async (ownerId: string, shopName: string) => {
+    const ok = await confirm({
+      title: `อนุมัติกลับร้าน "${shopName}"?`,
+      message: 'ผู้ใช้จะกลับเข้าระบบได้ในฐานะ owner',
+      confirmLabel: 'อนุมัติกลับ',
+    })
+    if (!ok) return
+    setError('')
+    setActionLoading(ownerId)
+    try {
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ role: 'owner' })
+        .eq('id', ownerId)
+      if (updateErr) throw updateErr
+      setShops((prev) =>
+        prev.map((s) =>
+          s.owner?.id === ownerId ? { ...s, owner: { ...s.owner!, role: 'owner' } } : s
+        )
+      )
+      showSuccess('อนุมัติกลับเรียบร้อย')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleSoftDeleteShop = async (shopId: string, shopName: string) => {
+    const ok = await confirm({
+      title: `ลบร้าน "${shopName}"?`,
+      message: 'ร้านจะถูกซ่อน (soft delete) สามารถกู้คืนได้ภายหลัง',
+      confirmLabel: 'ลบร้าน',
+      danger: true,
+    })
+    if (!ok) return
+    setError('')
+    setActionLoading(shopId)
+    try {
+      const { error: updateErr } = await supabase
+        .from('shops')
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+        .eq('id', shopId)
+      if (updateErr) throw updateErr
+      setShops((prev) =>
+        prev.map((s) =>
+          s.id === shopId ? { ...s, is_deleted: true, deleted_at: new Date().toISOString() } : s
+        )
+      )
+      showSuccess(`ลบร้าน "${shopName}" เรียบร้อย`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleUndeleteShop = async (shopId: string, shopName: string) => {
+    const ok = await confirm({
+      title: `กู้คืนร้าน "${shopName}"?`,
+      message: 'ร้านจะกลับมาใช้งานได้ตามปกติ',
+      confirmLabel: 'กู้คืน',
+    })
+    if (!ok) return
+    setError('')
+    setActionLoading(shopId)
+    try {
+      const { error: updateErr } = await supabase
+        .from('shops')
+        .update({ is_deleted: false, deleted_at: null })
+        .eq('id', shopId)
+      if (updateErr) throw updateErr
+      setShops((prev) =>
+        prev.map((s) =>
+          s.id === shopId ? { ...s, is_deleted: false, deleted_at: null } : s
+        )
+      )
+      showSuccess(`กู้คืนร้าน "${shopName}" เรียบร้อย`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const getShopStatus = (shop: ShopRow): { label: string; color: string } => {
+    if (shop.is_deleted) return { label: 'Deleted', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' }
+    if (shop.owner?.role !== 'owner') return { label: 'Deactivated', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' }
+    return { label: 'Active', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' }
   }
 
   if (loading) {
@@ -194,11 +306,11 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* System Config */}
+      {/* System Config - PromptPay */}
       <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 dark:border-slate-700">
           <Settings size={16} className="text-gray-400 dark:text-slate-500" />
-          <h2 className="font-semibold text-gray-900 dark:text-slate-100">ตั้งค่าระบบ</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-slate-100">ตั้งค่า PromptPay</h2>
         </div>
         <div className="px-6 py-4 space-y-3">
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
@@ -240,73 +352,129 @@ export default function AdminPage() {
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-slate-700">
-            {shops.map((shop) => (
-              <div key={shop.id} className="flex items-start justify-between gap-4 px-6 py-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-gray-900 dark:text-slate-100">{shop.name}</p>
-                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
-                      Active
-                    </span>
-                  </div>
-                  {shop.owner ? (
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Users size={12} className="text-gray-400 dark:text-slate-500" />
-                      <p className="text-sm text-gray-600 dark:text-slate-300">
-                        {shop.owner.full_name ?? shop.owner.email}
-                        <span className="text-gray-400 dark:text-slate-500 ml-1.5 text-xs">
-                          {shop.owner.email}
+            {shops.map((shop) => {
+              const status = getShopStatus(shop)
+              const isDeleted = !!shop.is_deleted
+              const isDeactivated = shop.owner?.role !== 'owner' && !isDeleted
+
+              return (
+                <div
+                  key={shop.id}
+                  className={`px-6 py-4 ${isDeleted ? 'bg-red-50/50 dark:bg-red-950/10' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`font-semibold text-gray-900 dark:text-slate-100 ${isDeleted ? 'line-through text-red-400 dark:text-red-500' : ''}`}>
+                          {shop.name}
+                        </p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.color}`}>
+                          {status.label}
                         </span>
+                      </div>
+                      {shop.owner ? (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <Users size={12} className="text-gray-400 dark:text-slate-500" />
+                          <p className="text-sm text-gray-600 dark:text-slate-300">
+                            {shop.owner.full_name ?? shop.owner.email}
+                            <span className="text-gray-400 dark:text-slate-500 ml-1.5 text-xs">
+                              {shop.owner.email}
+                            </span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">ไม่มีเจ้าของ</p>
+                      )}
+                      <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
+                        PromptPay: {shop.promptpay_id || '-'} · สร้าง{' '}
+                        {new Date(shop.created_at).toLocaleDateString('th-TH')}
+                      </p>
+                      <p
+                        className={`text-xs mt-0.5 ${
+                          !shop.subscription_paid_until ||
+                          new Date(shop.subscription_paid_until) < new Date()
+                            ? 'text-red-500 dark:text-red-400 font-medium'
+                            : 'text-green-600 dark:text-green-400'
+                        }`}
+                      >
+                        สมาชิก:{' '}
+                        {shop.subscription_paid_until
+                          ? `ถึง ${new Date(shop.subscription_paid_until).toLocaleDateString('th-TH')}`
+                          : 'ยังไม่เปิดใช้'}
                       </p>
                     </div>
-                  ) : (
-                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">ไม่มีเจ้าของ</p>
-                  )}
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
-                    PromptPay: {shop.promptpay_id || '-'} ·{' '}
-                    {new Date(shop.created_at).toLocaleDateString('th-TH')}
-                  </p>
-                  <p className={`text-xs mt-0.5 ${
-                    !shop.subscription_paid_until || new Date(shop.subscription_paid_until) < new Date()
-                      ? 'text-red-500 dark:text-red-400 font-medium'
-                      : 'text-green-600 dark:text-green-400'
-                  }`}>
-                    สมาชิก: {shop.subscription_paid_until
-                      ? `ถึง ${new Date(shop.subscription_paid_until).toLocaleDateString('th-TH')}`
-                      : 'ยังไม่เปิดใช้'}
-                  </p>
-                </div>
+                  </div>
 
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => handleExtendSubscription(shop.id, shop.name)}
-                    disabled={actionLoading === shop.id}
-                    className="text-xs px-3 py-1.5 border border-green-200 dark:border-green-700/50 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
-                    title="ต่ออายุ 30 วัน"
-                  >
-                    <CalendarPlus size={13} />
-                    +30 วัน
-                  </button>
-                  {shop.owner && (
-                    <button
-                      onClick={() => handleDeactivateOwner(shop.owner!.id, shop.name)}
-                      disabled={actionLoading === shop.owner.id || actionLoading === shop.id}
-                      className="text-xs px-3 py-1.5 border border-orange-200 dark:border-orange-700/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none"
-                    >
-                      ยกเลิกสิทธิ์
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDeleteShop(shop.id, shop.name)}
-                    disabled={actionLoading === shop.id}
-                    className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-slate-600 hover:border-red-300 dark:hover:border-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
-                    title="ลบร้าน"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {/* Date picker for subscription */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={dateInputs[shop.id] || ''}
+                        onChange={(e) =>
+                          setDateInputs((prev) => ({ ...prev, [shop.id]: e.target.value }))
+                        }
+                        className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300"
+                      />
+                      <button
+                        onClick={() => handleSetSubscriptionDate(shop.id, shop.name)}
+                        disabled={actionLoading === shop.id || !dateInputs[shop.id]}
+                        className="text-xs px-3 py-1.5 border border-green-200 dark:border-green-700/50 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
+                        title="เลือกวันหมดอายุ"
+                      >
+                        <Calendar size={13} />
+                        ตั้งวันหมดอายุ
+                      </button>
+                    </div>
+
+                    {/* Deactivate / Reactivate */}
+                    {shop.owner && !isDeleted && (
+                      shop.owner.role === 'owner' ? (
+                        <button
+                          onClick={() => handleDeactivateOwner(shop.owner!.id, shop.name)}
+                          disabled={actionLoading === shop.owner.id}
+                          className="text-xs px-3 py-1.5 border border-orange-200 dark:border-orange-700/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
+                        >
+                          <ShieldOff size={13} />
+                          ยกเลิกสิทธิ์
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleReactivateOwner(shop.owner!.id, shop.name)}
+                          disabled={actionLoading === shop.owner.id}
+                          className="text-xs px-3 py-1.5 border border-blue-200 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
+                        >
+                          <ShieldCheck size={13} />
+                          อนุมัติกลับ
+                        </button>
+                      )
+                    )}
+
+                    {/* Soft Delete / Undelete */}
+                    {isDeleted ? (
+                      <button
+                        onClick={() => handleUndeleteShop(shop.id, shop.name)}
+                        disabled={actionLoading === shop.id}
+                        className="text-xs px-3 py-1.5 border border-blue-200 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
+                      >
+                        <RotateCcw size={13} />
+                        กู้คืน
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleSoftDeleteShop(shop.id, shop.name)}
+                        disabled={actionLoading === shop.id}
+                        className="text-xs px-3 py-1.5 border border-red-200 dark:border-red-700/50 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
+                      >
+                        <Trash2 size={13} />
+                        ลบร้าน
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>
