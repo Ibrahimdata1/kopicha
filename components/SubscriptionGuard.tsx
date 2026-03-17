@@ -262,9 +262,16 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">
             ไม่สามารถใช้ระบบได้
           </h2>
-          <p className="text-gray-600 dark:text-slate-400 text-sm mb-6">
+          <p className="text-gray-600 dark:text-slate-400 text-sm mb-4">
             กรุณาชำระค่าบริการรายเดือนเพื่อใช้งานต่อ
           </p>
+
+          {/* Package info */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 mb-4 text-left">
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">ร้าน: <strong className="text-gray-800 dark:text-slate-200">{shop?.name}</strong></p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">แพ็คเกจ: <strong className="text-gray-800 dark:text-slate-200">Pro (รายเดือน)</strong></p>
+            <p className="text-xs text-red-500 dark:text-red-400">หมดอายุ: <strong>{shop?.subscription_paid_until ? new Date(shop.subscription_paid_until).toLocaleDateString('en-GB') : 'ยังไม่ได้ตั้ง'}</strong> (เกิน {daysOverdue} วัน)</p>
+          </div>
 
           <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-5 mb-4">
             <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3">
@@ -323,6 +330,12 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-1">
               กรุณาชำระค่าบริการ
             </h3>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">
+              ร้าน: <strong>{shop?.name}</strong> · แพ็คเกจ Pro (รายเดือน)
+            </p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">
+              หมดอายุ: <strong>{shop?.subscription_paid_until ? new Date(shop.subscription_paid_until).toLocaleDateString('en-GB') : '-'}</strong>
+            </p>
             <p className="text-sm text-gray-600 dark:text-slate-400 mb-1">
               ค่าบริการรายเดือน ฿{MONTHLY_FEE}
             </p>
