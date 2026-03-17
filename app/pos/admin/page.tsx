@@ -111,9 +111,15 @@ export default function AdminPage() {
     setError('')
     try {
       if (!profile?.id) throw new Error('ไม่พบโปรไฟล์')
+      const pp = companyPromptpay.trim()
+      if (!pp) throw new Error('กรุณากรอกหมายเลข PromptPay')
+      const digits = pp.replace(/\D/g, '')
+      if (digits.length !== 10 && digits.length !== 13) {
+        throw new Error('PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขบัตรประชาชน/นิติบุคคล 13 หลัก')
+      }
       const { error: updateErr } = await supabase
         .from('profiles')
-        .update({ pending_promptpay: companyPromptpay.trim() })
+        .update({ pending_promptpay: pp })
         .eq('id', profile.id)
       if (updateErr) throw updateErr
       showSuccess('บันทึก PromptPay รับเงินเรียบร้อย')
