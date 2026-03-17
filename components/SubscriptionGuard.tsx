@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { generatePromptPayPayload } from '@/lib/qr'
-import { AlertTriangle, X, Ticket, Check, Clock } from 'lucide-react'
+import { AlertTriangle, X, Ticket, Check, Clock, ShieldOff, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import type { Shop } from '@/lib/types'
 
@@ -62,6 +62,30 @@ export default function SubscriptionGuard({ shop, children }: Props) {
         if (data?.pending_promptpay) setCompanyPromptpay(data.pending_promptpay)
       })
   }, [])
+
+  // ═══ ร้านถูกลบ (soft delete) → แสดงหน้าระงับ ═══
+  if (shop?.is_deleted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-red-200 dark:border-red-800/40 w-full max-w-sm p-8 text-center">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ShieldOff size={30} className="text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">ร้านค้าถูกระงับ</h2>
+          <p className="text-gray-600 dark:text-slate-400 text-sm mb-6">
+            ร้านค้าของคุณถูกระงับการใช้งาน<br />กรุณาติดต่อผู้ดูแลระบบ
+          </p>
+          <a
+            href="mailto:contact.runawaytech@gmail.com"
+            className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 rounded-xl transition-all shadow-md shadow-primary-500/25 mb-3"
+          >
+            <Mail size={16} />
+            contact.runawaytech@gmail.com
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   const daysOverdue = getDaysOverdue(shop)
   const trialDaysLeft = getTrialDaysLeft(shop)
