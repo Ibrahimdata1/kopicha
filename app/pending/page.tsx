@@ -87,13 +87,6 @@ export default function PendingPage() {
                 ติดต่อ contact.runawaytech@gmail.com
               </a>
 
-              <button
-                onClick={handleRetryLogin}
-                disabled={checking}
-                className="w-full border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 font-medium py-2.5 rounded-xl transition-all hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 mb-4 text-sm"
-              >
-                {checking ? 'กำลังตรวจสอบ...' : 'ตรวจสอบสถานะอีกครั้ง'}
-              </button>
             </>
           ) : (
             <>
