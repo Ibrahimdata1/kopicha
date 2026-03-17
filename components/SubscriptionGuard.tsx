@@ -53,18 +53,12 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   const [setupFeePaid, setSetupFeePaid] = useState(shop?.setup_fee_paid ?? false)
   const [companyPromptpay, setCompanyPromptpay] = useState('0994569544')
 
-  // Fetch company PromptPay from super admin profile (pending_promptpay field)
+  // Fetch company PromptPay via DB function (bypasses RLS)
   useEffect(() => {
     const supabase = createClient()
-    supabase
-      .from('profiles')
-      .select('pending_promptpay')
-      .eq('role', 'super_admin')
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        if (data?.pending_promptpay) setCompanyPromptpay(data.pending_promptpay)
-      })
+    supabase.rpc('get_company_promptpay').then(({ data }) => {
+      if (data) setCompanyPromptpay(data)
+    })
   }, [])
 
   // ═══ ร้านถูกลบ (soft delete) → แสดงหน้าระงับ ═══
