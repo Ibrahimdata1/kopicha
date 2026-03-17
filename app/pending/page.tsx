@@ -10,6 +10,7 @@ export default function PendingPage() {
   const [shopName, setShopName] = useState('')
   const [checking, setChecking] = useState(false)
   const [isDeactivated, setIsDeactivated] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -30,9 +31,9 @@ export default function PendingPage() {
             setShopName(profile.pending_shop_name)
             setIsDeactivated(false)
           } else {
-            // No pending_shop_name + no role = deactivated
             setIsDeactivated(true)
           }
+          setLoaded(true)
         })
     })
   }, [router])
@@ -57,6 +58,14 @@ export default function PendingPage() {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  if (!loaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-teal-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+        <div className="spinner w-8 h-8 border-[3px]" />
+      </div>
+    )
   }
 
   return (
