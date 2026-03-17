@@ -93,7 +93,7 @@ export default function SettingsPage() {
     try {
       const { error: updateErr } = await supabase
         .from('shops')
-        .update({ name, promptpay_id: pp, table_count: tc, payment_mode: paymentMode })
+        .update({ name, promptpay_id: ppDigits, table_count: tc, payment_mode: paymentMode })
         .eq('id', shop.id)
       if (updateErr) throw updateErr
       await refreshShop()

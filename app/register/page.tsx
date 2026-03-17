@@ -85,7 +85,7 @@ function RegisterForm() {
 
       const { data: result, error: rpcError } = await supabase.rpc('self_register_shop', {
         p_shop_name: shopName.trim(),
-        p_promptpay: promptpay.trim(),
+        p_promptpay: promptpay.trim().replace(/\D/g, ''),
         p_referral_code: refCode || null,
       })
       if (rpcError) throw rpcError
