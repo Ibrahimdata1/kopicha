@@ -129,6 +129,14 @@ export default function AdminPage() {
   const handleSetSubscriptionDate = async (shopId: string, shopName: string) => {
     const dateStr = dateInputs[shopId]
     if (!dateStr) { setError('กรุณาเลือกวันที่'); return }
+    const today = new Date().toISOString().slice(0, 10)
+    if (dateStr < today) { setError('วันที่ต้องไม่น้อยกว่าวันนี้'); return }
+    const ok = await confirm({
+      title: `ตั้งวันหมดอายุร้าน "${shopName}"?`,
+      message: `หมดอายุวันที่ ${dateStr}`,
+      confirmLabel: 'ยืนยัน',
+    })
+    if (!ok) return
     setActionLoading(shopId)
     setError('')
     try {
@@ -149,10 +157,10 @@ export default function AdminPage() {
     }
   }
 
-  const handleDeactivateOwner = async (ownerId: string, shopName: string) => {
+  const handleDeactivateOwner = async (ownerId: string, shopId: string, shopName: string) => {
     const ok = await confirm({
       title: `ยกเลิกสิทธิ์ร้าน "${shopName}"?`,
-      message: 'ผู้ใช้จะเข้าระบบไม่ได้จนกว่าจะอนุมัติใหม่',
+      message: 'Owner และ Cashier ทั้งหมดในร้านจะเข้าระบบไม่ได้จนกว่าจะอนุมัติใหม่',
       confirmLabel: 'ยกเลิกสิทธิ์',
       danger: true,
     })
@@ -160,11 +168,14 @@ export default function AdminPage() {
     setError('')
     setActionLoading(ownerId)
     try {
+      // Deactivate owner
       const { error: updateErr } = await supabase
         .from('profiles')
         .update({ role: null })
         .eq('id', ownerId)
       if (updateErr) throw updateErr
+      // Deactivate all cashiers in this shop
+      await supabase.from('profiles').update({ role: null }).eq('shop_id', shopId).eq('role', 'cashier')
       setShops((prev) =>
         prev.map((s) =>
           s.owner?.id === ownerId ? { ...s, owner: { ...s.owner!, role: null } } : s
@@ -178,21 +189,24 @@ export default function AdminPage() {
     }
   }
 
-  const handleReactivateOwner = async (ownerId: string, shopName: string) => {
+  const handleReactivateOwner = async (ownerId: string, shopId: string, shopName: string) => {
     const ok = await confirm({
       title: `อนุมัติกลับร้าน "${shopName}"?`,
-      message: 'ผู้ใช้จะกลับเข้าระบบได้ในฐานะ owner',
+      message: 'Owner และ Cashier ทั้งหมดจะกลับเข้าระบบได้',
       confirmLabel: 'อนุมัติกลับ',
     })
     if (!ok) return
     setError('')
     setActionLoading(ownerId)
     try {
+      // Reactivate owner
       const { error: updateErr } = await supabase
         .from('profiles')
         .update({ role: 'owner' })
         .eq('id', ownerId)
       if (updateErr) throw updateErr
+      // Reactivate cashiers in this shop (those with shop_id but null role)
+      await supabase.from('profiles').update({ role: 'cashier' }).eq('shop_id', shopId).is('role', null)
       setShops((prev) =>
         prev.map((s) =>
           s.owner?.id === ownerId ? { ...s, owner: { ...s.owner!, role: 'owner' } } : s
@@ -217,6 +231,9 @@ export default function AdminPage() {
     setError('')
     setActionLoading(shopId)
     try {
+      // Deactivate all users in this shop (owner + cashiers)
+      await supabase.from('profiles').update({ role: null }).eq('shop_id', shopId)
+      // Soft delete shop
       const { error: updateErr } = await supabase
         .from('shops')
         .update({ is_deleted: true, deleted_at: new Date().toISOString() })
@@ -245,6 +262,7 @@ export default function AdminPage() {
     setError('')
     setActionLoading(shopId)
     try {
+      // Undelete shop
       const { error: updateErr } = await supabase
         .from('shops')
         .update({ is_deleted: false, deleted_at: null })
@@ -431,6 +449,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-1.5">
                       <input
                         type="date"
+                        min={new Date().toISOString().slice(0, 10)}
                         value={dateInputs[shop.id] || ''}
                         onChange={(e) =>
                           setDateInputs((prev) => ({ ...prev, [shop.id]: e.target.value }))
@@ -452,7 +471,7 @@ export default function AdminPage() {
                     {shop.owner && !isDeleted ? (
                       shop.owner.role === 'owner' ? (
                         <button
-                          onClick={() => handleDeactivateOwner(shop.owner!.id, shop.name)}
+                          onClick={() => handleDeactivateOwner(shop.owner!.id, shop.id, shop.name)}
                           disabled={actionLoading === shop.owner.id}
                           className="text-xs px-3 py-1.5 border border-orange-200 dark:border-orange-700/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
                         >
@@ -461,7 +480,7 @@ export default function AdminPage() {
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleReactivateOwner(shop.owner!.id, shop.name)}
+                          onClick={() => handleReactivateOwner(shop.owner!.id, shop.id, shop.name)}
                           disabled={actionLoading === shop.owner.id}
                           className="text-xs px-3 py-1.5 border border-blue-200 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
                         >
