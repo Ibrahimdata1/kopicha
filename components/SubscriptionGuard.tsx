@@ -35,6 +35,34 @@ function getTrialDaysLeft(shop: Shop | null): number {
   return Math.max(0, diff)
 }
 
+function addOneMonth(date: Date): Date {
+  const d = new Date(date)
+  d.setMonth(d.getMonth() + 1)
+  return d
+}
+
+function calcNewExpiry(shop: Shop | null): string {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (!shop?.subscription_paid_until) {
+    // No previous expiry — start from today + 1 month
+    return addOneMonth(today).toISOString().slice(0, 10)
+  }
+
+  const originalExpiry = new Date(shop.subscription_paid_until)
+  originalExpiry.setHours(0, 0, 0, 0)
+  const daysLate = Math.floor((today.getTime() - originalExpiry.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (daysLate > 10) {
+    // Blocked for 7+ days (3 grace + 7 blocked) — fresh start from today
+    return addOneMonth(today).toISOString().slice(0, 10)
+  } else {
+    // Paid on time or within 10 days — extend from original expiry
+    return addOneMonth(originalExpiry).toISOString().slice(0, 10)
+  }
+}
+
 function getStorageKey(shopId: string) {
   const today = new Date().toISOString().slice(0, 10)
   return `qrforpay_sub_dismissed_${shopId}_${today}`
@@ -124,12 +152,10 @@ export default function SubscriptionGuard({ shop, children }: Props) {
         return
       }
 
-      // Mark setup fee as paid + auto set subscription +30 days
-      const subDate = new Date()
-      subDate.setDate(subDate.getDate() + 30)
+      // Mark setup fee as paid + auto set subscription +1 calendar month
       const { error: updateErr } = await supabase
         .from('shops')
-        .update({ setup_fee_paid: true, referral_code: code, subscription_paid_until: subDate.toISOString().slice(0, 10) })
+        .update({ setup_fee_paid: true, referral_code: code, subscription_paid_until: calcNewExpiry(shop) })
         .eq('id', shop.id)
 
       if (updateErr) throw updateErr
@@ -146,11 +172,9 @@ export default function SubscriptionGuard({ shop, children }: Props) {
     if (!shop?.id) return
     try {
       const supabase = createClient()
-      const subDate = new Date()
-      subDate.setDate(subDate.getDate() + 30)
       await supabase
         .from('shops')
-        .update({ setup_fee_paid: true, subscription_paid_until: subDate.toISOString().slice(0, 10) })
+        .update({ setup_fee_paid: true, subscription_paid_until: calcNewExpiry(shop) })
         .eq('id', shop.id)
       setSetupFeePaid(true)
     } catch { /* ignore */ }
@@ -290,14 +314,12 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             onClick={async () => {
               if (!shop?.id) return
               const supabase = createClient()
-              const newDate = new Date()
-              newDate.setDate(newDate.getDate() + 30)
-              await supabase.from('shops').update({ subscription_paid_until: newDate.toISOString().slice(0, 10) }).eq('id', shop.id)
+              await supabase.from('shops').update({ subscription_paid_until: calcNewExpiry(shop) }).eq('id', shop.id)
               window.location.reload()
             }}
             className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition mt-2"
           >
-            ชำระแล้ว (ต่ออายุ 30 วัน)
+            ชำระแล้ว (ต่ออายุ 1 เดือน)
           </button>
         </div>
       </div>
@@ -381,14 +403,12 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                   onClick={async () => {
                     if (!shop?.id) return
                     const supabase = createClient()
-                    const newDate = new Date()
-                    newDate.setDate(newDate.getDate() + 30)
-                    await supabase.from('shops').update({ subscription_paid_until: newDate.toISOString().slice(0, 10) }).eq('id', shop.id)
+                    await supabase.from('shops').update({ subscription_paid_until: calcNewExpiry(shop) }).eq('id', shop.id)
                     window.location.reload()
                   }}
                   className="mt-3 w-full py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition"
                 >
-                  ชำระแล้ว (ต่ออายุ 30 วัน)
+                  ชำระแล้ว (ต่ออายุ 1 เดือน)
                 </button>
                 <button
                   onClick={handleDismiss}
