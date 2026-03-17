@@ -102,7 +102,12 @@ function RegisterForm() {
   const handleAgentRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!agentName.trim() || agentName.trim().length < 2) { setError('กรุณากรอกชื่อ (อย่างน้อย 2 ตัว)'); return }
-    if (!agentPhone.trim() || agentPhone.replace(/\D/g, '').length < 9) { setError('กรุณากรอกเบอร์โทร'); return }
+    const phoneDigits = agentPhone.replace(/\D/g, '')
+    if (!phoneDigits) { setError('กรุณากรอกเบอร์โทร'); return }
+    if (phoneDigits.length !== 10) { setError('เบอร์โทรต้อง 10 หลัก'); return }
+    if (!phoneDigits.startsWith('0')) { setError('เบอร์โทรต้องขึ้นต้นด้วย 0'); return }
+    const prefix = phoneDigits.substring(0, 2)
+    if (!['06', '08', '09'].includes(prefix)) { setError('เบอร์โทรต้องขึ้นต้นด้วย 06, 08 หรือ 09'); return }
 
     setLoading(true)
     setError('')
@@ -113,7 +118,7 @@ function RegisterForm() {
 
       const { error: insertErr } = await supabase.from('agents').insert({
         name: agentName.trim(),
-        phone: agentPhone.trim(),
+        phone: phoneDigits,
         line_id: agentLine.trim() || null,
         code,
       })
@@ -123,7 +128,7 @@ function RegisterForm() {
           const code2 = generateCode(agentName)
           const { error: retryErr } = await supabase.from('agents').insert({
             name: agentName.trim(),
-            phone: agentPhone.trim(),
+            phone: phoneDigits,
             line_id: agentLine.trim() || null,
             code: code2,
           })
@@ -275,7 +280,7 @@ function RegisterForm() {
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     <Phone size={13} className="inline mr-1.5 text-slate-400" />เบอร์โทร
                   </label>
-                  <input type="tel" value={agentPhone} onChange={(e) => setAgentPhone(e.target.value)} className="input" placeholder="0812345678" required />
+                  <input type="tel" value={agentPhone} onChange={(e) => setAgentPhone(e.target.value.replace(/\D/g, ''))} inputMode="numeric" maxLength={10} className="input" placeholder="0812345678" required />
                 </div>
                 {error && <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl border border-red-100 dark:border-red-800/40">{error}</div>}
                 <button type="submit" disabled={loading} className="btn-primary w-full py-3 bg-amber-500 hover:bg-amber-600 shadow-amber-500/25">
