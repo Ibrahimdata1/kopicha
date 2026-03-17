@@ -93,14 +93,13 @@ export default function AdminPage() {
     setSavingConfig(true)
     setError('')
     try {
-      // Save company PromptPay to super admin's own profile
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('ไม่พบข้อมูลผู้ใช้')
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ pending_promptpay: companyPromptpay })
-        .eq('id', user.id)
-      if (updateErr) throw updateErr
+      const res = await fetch('/api/admin/update-promptpay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promptpay: companyPromptpay }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด')
       setSuccessMsg('บันทึก PromptPay รับเงินเรียบร้อย')
       setTimeout(() => setSuccessMsg(''), 3000)
     } catch (err: unknown) {
