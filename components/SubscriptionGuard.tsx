@@ -17,11 +17,7 @@ interface Props {
 }
 
 function getDaysOverdue(shop: Shop | null): number {
-  // No subscription date set → if setup_fee_paid, they need to pay monthly
-  if (!shop?.subscription_paid_until) {
-    // If they paid setup fee but no subscription date, treat as overdue immediately
-    return shop?.setup_fee_paid ? 999 : 0
-  }
+  if (!shop?.subscription_paid_until) return 0
   const paidUntil = new Date(shop.subscription_paid_until)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -128,10 +124,12 @@ export default function SubscriptionGuard({ shop, children }: Props) {
         return
       }
 
-      // Mark setup fee as paid (agent collected it)
+      // Mark setup fee as paid + auto set subscription +30 days
+      const subDate = new Date()
+      subDate.setDate(subDate.getDate() + 30)
       const { error: updateErr } = await supabase
         .from('shops')
-        .update({ setup_fee_paid: true, referral_code: code })
+        .update({ setup_fee_paid: true, referral_code: code, subscription_paid_until: subDate.toISOString().slice(0, 10) })
         .eq('id', shop.id)
 
       if (updateErr) throw updateErr
@@ -148,9 +146,11 @@ export default function SubscriptionGuard({ shop, children }: Props) {
     if (!shop?.id) return
     try {
       const supabase = createClient()
+      const subDate = new Date()
+      subDate.setDate(subDate.getDate() + 30)
       await supabase
         .from('shops')
-        .update({ setup_fee_paid: true })
+        .update({ setup_fee_paid: true, subscription_paid_until: subDate.toISOString().slice(0, 10) })
         .eq('id', shop.id)
       setSetupFeePaid(true)
     } catch { /* ignore */ }
