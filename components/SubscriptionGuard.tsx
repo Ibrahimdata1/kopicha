@@ -286,9 +286,19 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             </p>
           </div>
 
-          <p className="text-xs text-gray-400 dark:text-slate-500">
-            หลังชำระเงินแล้ว กรุณาแจ้งแอดมินเพื่อเปิดระบบ
-          </p>
+          <button
+            onClick={async () => {
+              if (!shop?.id) return
+              const supabase = createClient()
+              const newDate = new Date()
+              newDate.setDate(newDate.getDate() + 30)
+              await supabase.from('shops').update({ subscription_paid_until: newDate.toISOString().slice(0, 10) }).eq('id', shop.id)
+              window.location.reload()
+            }}
+            className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition mt-2"
+          >
+            ชำระแล้ว (ต่ออายุ 30 วัน)
+          </button>
         </div>
       </div>
     )
@@ -368,10 +378,23 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                   PromptPay: {companyPromptpay}
                 </p>
                 <button
-                  onClick={handleDismiss}
+                  onClick={async () => {
+                    if (!shop?.id) return
+                    const supabase = createClient()
+                    const newDate = new Date()
+                    newDate.setDate(newDate.getDate() + 30)
+                    await supabase.from('shops').update({ subscription_paid_until: newDate.toISOString().slice(0, 10) }).eq('id', shop.id)
+                    window.location.reload()
+                  }}
                   className="mt-3 w-full py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition"
                 >
-                  ชำระแล้ว / ปิด
+                  ชำระแล้ว (ต่ออายุ 30 วัน)
+                </button>
+                <button
+                  onClick={handleDismiss}
+                  className="mt-2 w-full py-2 text-gray-500 dark:text-slate-400 text-xs hover:underline"
+                >
+                  ภายหลัง
                 </button>
               </div>
             )}
