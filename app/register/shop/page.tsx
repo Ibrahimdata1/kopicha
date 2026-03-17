@@ -1,11 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Coffee, Store } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 
 export default function RegisterShopPage() {
+  return <Suspense><RegisterShopForm /></Suspense>
+}
+
+function RegisterShopForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const refCode = searchParams.get('ref') || ''
