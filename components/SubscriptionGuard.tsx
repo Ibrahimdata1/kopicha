@@ -17,7 +17,11 @@ interface Props {
 }
 
 function getDaysOverdue(shop: Shop | null): number {
-  if (!shop?.subscription_paid_until) return 0
+  // No subscription date set → if setup_fee_paid, they need to pay monthly
+  if (!shop?.subscription_paid_until) {
+    // If they paid setup fee but no subscription date, treat as overdue immediately
+    return shop?.setup_fee_paid ? 999 : 0
+  }
   const paidUntil = new Date(shop.subscription_paid_until)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -90,8 +94,8 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   const daysOverdue = getDaysOverdue(shop)
   const trialDaysLeft = getTrialDaysLeft(shop)
   const trialExpired = !setupFeePaid && trialDaysLeft >= 0 && trialDaysLeft <= 0
-  const isBlocked = daysOverdue >= 3
-  const needsReminder = daysOverdue > 0 && !isBlocked
+  const isBlocked = setupFeePaid && daysOverdue >= 3
+  const needsReminder = setupFeePaid && daysOverdue > 0 && daysOverdue < 3
 
   // Check if already dismissed today
   useEffect(() => {
