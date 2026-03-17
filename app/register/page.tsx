@@ -263,7 +263,7 @@ function RegisterForm() {
             <>
               <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-4 mb-6 border border-amber-200 dark:border-amber-800/40">
                 <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">รับ ฿999 ทุกร้านที่แนะนำสำเร็จ</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">แนะนำร้านอาหาร/คาเฟ่ เก็บค่าเซ็ตอัพโดยตรง</p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">แนะนำร้านอาหาร/คาเฟ่ เก็บค่าแนะนำโดยตรง</p>
               </div>
 
               <form onSubmit={handleAgentRegister} className="space-y-4">
