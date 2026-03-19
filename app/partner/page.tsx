@@ -117,15 +117,15 @@ export default function PartnerPage() {
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">วิธีใช้งาน</h3>
               <div className="flex gap-3 text-sm">
                 <span className="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold text-xs shrink-0">1</span>
-                <p className="text-slate-600 dark:text-slate-400">ส่ง<strong>ลิงก์</strong>ให้ร้านค้า หรือช่วยสมัครให้</p>
+                <p className="text-slate-600 dark:text-stone-500">ส่ง<strong>ลิงก์</strong>ให้ร้านค้า หรือช่วยสมัครให้</p>
               </div>
               <div className="flex gap-3 text-sm">
                 <span className="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold text-xs shrink-0">2</span>
-                <p className="text-slate-600 dark:text-slate-400">เก็บค่าเซ็ตอัพ <strong>฿999</strong> จากร้านค้าโดยตรง</p>
+                <p className="text-slate-600 dark:text-stone-500">เก็บค่าเซ็ตอัพ <strong>฿999</strong> จากร้านค้าโดยตรง</p>
               </div>
               <div className="flex gap-3 text-sm">
                 <span className="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold text-xs shrink-0">3</span>
-                <p className="text-slate-600 dark:text-slate-400">ช่วยร้านตั้งเมนู ตั้งโต๊ะ สอนใช้ระบบ</p>
+                <p className="text-slate-600 dark:text-stone-500">ช่วยร้านตั้งเมนู ตั้งโต๊ะ สอนใช้ระบบ</p>
               </div>
             </div>
 
@@ -165,7 +165,7 @@ export default function PartnerPage() {
           <form onSubmit={handleRegister} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                <User size={13} className="inline mr-1.5 text-slate-400" />
+                <User size={13} className="inline mr-1.5 text-stone-400 dark:text-stone-500" />
                 ชื่อ-นามสกุล
               </label>
               <input
@@ -180,7 +180,7 @@ export default function PartnerPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                <Phone size={13} className="inline mr-1.5 text-slate-400" />
+                <Phone size={13} className="inline mr-1.5 text-stone-400 dark:text-stone-500" />
                 เบอร์โทร
               </label>
               <input
@@ -194,7 +194,7 @@ export default function PartnerPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                <MessageCircle size={13} className="inline mr-1.5 text-slate-400" />
+                <MessageCircle size={13} className="inline mr-1.5 text-stone-400 dark:text-stone-500" />
                 LINE ID <span className="text-muted font-normal">(ไม่บังคับ)</span>
               </label>
               <input

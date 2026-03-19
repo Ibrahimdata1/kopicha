@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import type { Profile, Shop } from '@/lib/types'
 import type { SessionWithOrders } from '@/components/SessionsView'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { useI18n } from '@/lib/i18n/context'
 
 interface Props {
   session: SessionWithOrders
@@ -21,13 +22,14 @@ function fmt(n: number | null | undefined) {
   return '฿' + (n ?? 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-const BILL_STATUS = {
-  active: { label: 'รอชำระเงิน', badge: 'badge badge-yellow' },
-  paid: { label: 'ชำระแล้ว', badge: 'badge badge-green' },
-  cancelled: { label: 'บิลยกเลิก', badge: 'badge badge-red' },
+const BILL_STATUS_BADGE = {
+  active: 'badge badge-yellow',
+  paid: 'badge badge-green',
+  cancelled: 'badge badge-red',
 } as const
 
 export default function SessionDetailModal({ session: initialSession, shop, profile, orderUrl, onClose, onRefresh }: Props) {
+  const { t } = useI18n()
   const printRef = useRef<HTMLDivElement>(null)
   const [cashInput, setCashInput] = useState('')
   const [showCash, setShowCash] = useState(false)
@@ -161,9 +163,9 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
 
   const handleApplyDiscount = async () => {
     const val = parseFloat(discountInput) || 0
-    if (val <= 0) { setError('กรุณาใส่ส่วนลด'); return }
-    if (discountType === 'percent' && val > 100) { setError('ส่วนลดเกิน 100%'); return }
-    if (discountType === 'fixed' && val > subtotalBeforeDiscount) { setError('ส่วนลดเกินยอดรวม'); return }
+    if (val <= 0) { setError(t('detail.enterDiscount')); return }
+    if (discountType === 'percent' && val > 100) { setError(t('detail.discountOver100')); return }
+    if (discountType === 'fixed' && val > subtotalBeforeDiscount) { setError(t('detail.discountOverTotal')); return }
 
     setProcessing(true)
     setError('')
@@ -178,14 +180,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
       setDiscountNote('')
       onRefresh()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setProcessing(false)
     }
   }
 
   const handleRemoveDiscount = async () => {
-    const ok = await confirm({ title: 'ลบส่วนลด?', confirmLabel: 'ลบส่วนลด', danger: true })
+    const ok = await confirm({ title: t('detail.removeDiscount'), confirmLabel: t('detail.removeDiscount'), danger: true })
     if (!ok) return
     setProcessing(true)
     try {
@@ -418,10 +420,10 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
 
       setShowCash(false)
       setCashInput('')
-      setPaidSuccess({ method: method === 'cash' ? 'เงินสด' : 'โอนเงิน', staffName })
+      setPaidSuccess({ method: method === 'cash' ? t('detail.cash') : t('detail.transfer'), staffName })
       onRefresh()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setProcessing(false)
     }
@@ -429,9 +431,9 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
 
   const handleTransferPay = async () => {
     const ok = await confirm({
-      title: 'ยืนยันรับโอนเงิน',
-      message: `ยอด ${fmt(grandTotal)}${discountAmt > 0 ? ` (ลด ${fmt(discountAmt)})` : ''}`,
-      confirmLabel: 'ยืนยันรับโอน',
+      title: t('detail.confirmTransfer'),
+      message: `${t('detail.total')} ${fmt(grandTotal)}${discountAmt > 0 ? ` (${t('detail.discountLabel')} ${fmt(discountAmt)})` : ''}`,
+      confirmLabel: t('detail.confirmTransfer'),
     })
     if (!ok) return
     await markSessionPaid('transfer')
@@ -440,14 +442,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
   const handleCashPay = async () => {
     const received = parseFloat(cashInput) || 0
     if (received < grandTotal) {
-      setError(`เงินไม่พอ ยอดที่ต้องชำระ ${fmt(grandTotal)}`)
+      setError(t('detail.notEnough', { amount: fmt(grandTotal) }))
       return
     }
     const change = received - grandTotal
     const ok = await confirm({
-      title: 'ยืนยันรับเงินสด',
-      message: `รับ ${fmt(received)} · ทอน ${fmt(change)}`,
-      confirmLabel: 'ยืนยัน',
+      title: t('detail.confirmCash'),
+      message: `${t('detail.received')} ${fmt(received)} · ${t('detail.change')} ${fmt(change)}`,
+      confirmLabel: t('common.confirm'),
     })
     if (!ok) return
     await markSessionPaid('cash', { received, change })
@@ -476,14 +478,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
       setNewTableLabel('')
       onRefresh()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setProcessing(false)
     }
   }
 
   const handleCancelBill = async () => {
-    const ok = await confirm({ title: 'ยกเลิกบิลนี้?', confirmLabel: 'ยกเลิกบิล', danger: true })
+    const ok = await confirm({ title: t('detail.cancelBillConfirm'), confirmLabel: t('detail.cancelBill'), danger: true })
     if (!ok) return
     setProcessing(true)
     setError('')
@@ -510,14 +512,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
       onRefresh()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setProcessing(false)
     }
   }
 
   const handleCancelItem = async (orderId: string, itemId: string) => {
-    const ok = await confirm({ title: 'ยกเลิกรายการนี้?', confirmLabel: 'ยกเลิก', danger: true })
+    const ok = await confirm({ title: t('detail.cancelItemConfirm'), confirmLabel: t('common.cancel'), danger: true })
     if (!ok) return
     setCancellingItem(itemId)
     setError('')
@@ -571,7 +573,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
       // Also refresh parent (table card) so totals stay in sync
       onRefresh()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
       // Revert on error — re-fetch from DB
       await refreshLocal()
     } finally {
@@ -579,7 +581,8 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
     }
   }
 
-  const billStatus = BILL_STATUS[session.status as keyof typeof BILL_STATUS] ?? BILL_STATUS.active
+  const billStatusBadge = BILL_STATUS_BADGE[session.status as keyof typeof BILL_STATUS_BADGE] ?? BILL_STATUS_BADGE.active
+  const billStatusLabel = session.status === 'active' ? t('detail.pendingPayment') : session.status === 'paid' ? t('detail.paid') : t('detail.billCancelled')
 
   return (
     <>
@@ -589,7 +592,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0">
           <div className="flex items-center gap-3">
-            <span className={billStatus.badge}>{billStatus.label}</span>
+            <span className={billStatusBadge}>{billStatusLabel}</span>
             {session.table_label ? (
               <button
                 onClick={() => { if (isActive) { setNewTableLabel(session.table_label ?? ''); setShowChangeTable(true) } }}
@@ -597,7 +600,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                 disabled={!isActive}
               >
                 <MapPin size={13} />
-                โต๊ะ {session.table_label}
+                {t('common.table')} {session.table_label}
               </button>
             ) : (
               isActive && (
@@ -605,14 +608,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                   onClick={() => setShowChangeTable(true)}
                   className="text-xs text-muted hover:text-primary-500 transition"
                 >
-                  + ระบุโต๊ะ
+                  + {t('detail.assignTable')}
                 </button>
               )
             )}
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 dark:text-stone-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
           >
             <X size={16} />
           </button>
@@ -627,7 +630,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                 <QRCodeSVG value={orderUrl} size={200} />
               </div>
             </div>
-            <p className="text-xs text-muted mb-1">สแกนเพื่อสั่งและชำระเงิน</p>
+            <p className="text-xs text-muted mb-1">{t('detail.scanToOrder')}</p>
             <p className="text-xs text-subtle break-all url">{orderUrl}</p>
           </div>
 
@@ -636,7 +639,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
             className="btn-secondary w-full py-2.5 text-sm"
           >
             <Printer size={14} />
-            พิมพ์ / บันทึก QR
+            {t('detail.printQR')}
           </button>
 
           {error && (
@@ -651,15 +654,15 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
-                    รายการ ({totalItemCount})
+                    {t('detail.items')} ({totalItemCount})
                   </h3>
                   <button
                     onClick={handlePrintReceipt}
                     className="flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 px-2 py-1 rounded-lg transition"
-                    title="พิมพ์ใบรายการ"
+                    title={t('detail.printReceipt')}
                   >
                     <ReceiptText size={13} />
-                    พิมพ์
+                    {t('detail.print')}
                   </button>
                 </div>
                 <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
@@ -677,8 +680,8 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                   <div key={batch.orderId} className="section-card overflow-hidden">
                     {/* Batch header */}
                     <div className="flex items-center justify-between px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                        ชุดที่ {batch.batchIndex}
+                      <span className="text-xs font-bold text-slate-500 dark:text-stone-500">
+                        {t('detail.batch')} {batch.batchIndex}
                       </span>
                       <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                         {fmt(batch.total)}
@@ -699,7 +702,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                                 disabled={cancellingItem === item.id}
                                 className="text-xs text-rose-500 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 px-2 py-0.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 transition disabled:opacity-40"
                               >
-                                ลบ
+                                {t('common.delete')}
                               </button>
                             )}
                           </div>
@@ -717,7 +720,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                     <div className="flex items-center gap-1.5">
                       <Tag size={13} className="text-orange-500" />
                       <span className="text-orange-600 dark:text-orange-400 font-medium">
-                        ส่วนลด {session.discount_type === 'percent' ? `${session.discount_amount}%` : fmt(session.discount_amount)}
+                        {t('detail.discountLabel')} {session.discount_type === 'percent' ? `${session.discount_amount}%` : fmt(session.discount_amount)}
                       </span>
                       {session.discount_note && (
                         <span className="text-xs text-muted">({session.discount_note})</span>
@@ -725,7 +728,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-orange-600 dark:text-orange-400 font-medium">-{fmt(discountAmt)}</span>
-                      <button onClick={handleRemoveDiscount} className="text-xs text-rose-500 hover:underline">ลบ</button>
+                      <button onClick={handleRemoveDiscount} className="text-xs text-rose-500 hover:underline">{t('common.delete')}</button>
                     </div>
                   </div>
                 ) : (
@@ -734,13 +737,13 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                     className="w-full flex items-center justify-center gap-2 py-3 mt-3 text-sm font-medium text-orange-600 dark:text-orange-400 border border-dashed border-orange-300 dark:border-orange-700 rounded-xl hover:bg-orange-50 dark:hover:bg-orange-900/20 transition"
                   >
                     <Tag size={15} />
-                    เพิ่มส่วนลด
+                    {t('detail.addDiscount')}
                   </button>
                 )
               )}
               {discountAmt > 0 && (
                 <div className="flex items-center justify-between mt-2 px-1">
-                  <span className="text-sm text-muted">ยอดสุทธิ</span>
+                  <span className="text-sm text-muted">{t('detail.netTotal')}</span>
                   <span className="text-xl font-bold text-slate-900 dark:text-slate-100">{fmt(grandTotal)}</span>
                 </div>
               )}
@@ -753,14 +756,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                     className="btn-secondary flex-1 py-3 text-sm"
                   >
                     <Banknote size={15} className="text-emerald-500" />
-                    เงินสด
+                    {t('detail.cash')}
                   </button>
                   <button
                     onClick={handleTransferPay}
                     disabled={processing}
                     className="btn-primary flex-1 py-3 text-sm"
                   >
-                    {processing ? <span className="spinner-sm" /> : <><ArrowRightLeft size={14} />รับโอน</>}
+                    {processing ? <span className="spinner-sm" /> : <><ArrowRightLeft size={14} />{t('detail.acceptTransfer')}</>}
                   </button>
                 </div>
               )}
@@ -768,14 +771,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
               {isPaid && (
                 <div className="flex items-center gap-2 justify-center mt-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/40">
                   <CheckCircle2 size={16} className="text-emerald-500" />
-                  <span className="text-emerald-700 dark:text-emerald-400 font-medium text-sm">ชำระเงินแล้ว</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-medium text-sm">{t('detail.paid')}</span>
                 </div>
               )}
             </div>
           ) : (
             <div className="text-center py-8 text-muted">
-              <p className="font-medium">ลูกค้ายังไม่ได้สั่ง</p>
-              <p className="text-sm mt-1">แชร์ QR code ให้ลูกค้าสแกน</p>
+              <p className="font-medium">{t('detail.noOrderYet')}</p>
+              <p className="text-sm mt-1">{t('detail.shareQR')}</p>
             </div>
           )}
 
@@ -787,7 +790,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
               className="w-full py-2.5 text-sm font-medium text-rose-500 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition disabled:opacity-50"
             >
               <XCircle size={14} className="inline mr-1.5 mb-0.5" />
-              ยกเลิกบิล
+              {t('detail.cancelBill')}
             </button>
           )}
         </div>
@@ -797,9 +800,9 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
       {showChangeTable && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-xs p-6 animate-slide-up">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-1">ย้ายโต๊ะ</h3>
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-1">{t('detail.moveTable')}</h3>
             <p className="text-sm text-muted mb-4">
-              {session.table_label ? `โต๊ะปัจจุบัน: ${session.table_label}` : 'ยังไม่ได้ระบุโต๊ะ'}
+              {session.table_label ? t('detail.currentTable', { table: session.table_label }) : t('detail.noTableAssigned')}
             </p>
 
             {shop.table_count > 0 ? (
@@ -826,7 +829,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                 type="text"
                 value={newTableLabel}
                 onChange={(e) => setNewTableLabel(e.target.value)}
-                placeholder="เลขโต๊ะใหม่"
+                placeholder={t('detail.newTableNumber')}
                 maxLength={20}
                 autoFocus
                 className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
@@ -838,14 +841,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                 onClick={() => { setShowChangeTable(false); setNewTableLabel('') }}
                 className="btn-secondary flex-1 py-3"
               >
-                ยกเลิก
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleChangeTable}
                 disabled={processing || !newTableLabel.trim() || newTableLabel.trim() === session.table_label}
                 className="btn-primary flex-1 py-3"
               >
-                {processing ? <span className="spinner-sm" /> : `ย้ายไปโต๊ะ ${newTableLabel}`}
+                {processing ? <span className="spinner-sm" /> : t('detail.moveToTable', { table: newTableLabel })}
               </button>
             </div>
           </div>
@@ -856,7 +859,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
       {showCash && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-xs p-6 animate-slide-up">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-1">รับเงินสด</h3>
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-1">{t('detail.receiveCash')}</h3>
             <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mb-1">
               {fmt(grandTotal)}
             </p>
@@ -865,7 +868,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
             )}
 
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              รับเงินมา (฿)
+              {t('detail.cashReceived')}
             </label>
             <input
               type="number"
@@ -879,9 +882,9 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
               const received = parseFloat(cashInput) || 0
               const change = received - grandTotal
               if (received > 0 && change >= 0)
-                return <p className="text-emerald-600 dark:text-emerald-400 font-bold mb-4">ทอน {fmt(change)}</p>
+                return <p className="text-emerald-600 dark:text-emerald-400 font-bold mb-4">{t('detail.change')} {fmt(change)}</p>
               if (received > 0 && change < 0)
-                return <p className="text-rose-500 dark:text-rose-400 font-bold mb-4">ขาด {fmt(-change)}</p>
+                return <p className="text-rose-500 dark:text-rose-400 font-bold mb-4">{t('detail.short')} {fmt(-change)}</p>
               return <div className="mb-4" />
             })()}
 
@@ -892,14 +895,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                 onClick={() => { setShowCash(false); setError('') }}
                 className="btn-secondary flex-1 py-3"
               >
-                ยกเลิก
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleCashPay}
                 disabled={processing}
                 className="btn-primary flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
               >
-                {processing ? <span className="spinner-sm" /> : 'ยืนยัน'}
+                {processing ? <span className="spinner-sm" /> : t('common.confirm')}
               </button>
             </div>
           </div>
@@ -912,7 +915,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-xs p-6 animate-slide-up">
             <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
               <Tag size={16} className="text-orange-500" />
-              เพิ่มส่วนลด
+              {t('detail.addDiscount')}
             </h3>
             <p className="text-sm text-muted mb-4">ยอดก่อนลด {fmt(subtotalBeforeDiscount)}</p>
 
@@ -926,7 +929,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                 }`}
               >
-                เปอร์เซ็นต์ %
+                {t('detail.percent')}
               </button>
               <button
                 onClick={() => setDiscountType('fixed')}
@@ -936,13 +939,13 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                 }`}
               >
-                จำนวนเงิน ฿
+                {t('detail.fixedAmount')}
               </button>
             </div>
 
             {/* Amount input */}
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              {discountType === 'percent' ? 'ส่วนลด (%)' : 'ส่วนลด (฿)'}
+              {discountType === 'percent' ? t('detail.discountPercent') : t('detail.discountBaht')}
             </label>
             <input
               type="number"
@@ -964,11 +967,11 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
               return (
                 <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 mb-3 text-sm">
                   <div className="flex justify-between text-orange-600 dark:text-orange-400">
-                    <span>ลด</span>
+                    <span>{t('detail.discountLabel')}</span>
                     <span>-{fmt(previewAmt)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-slate-900 dark:text-slate-100 mt-1">
-                    <span>ยอดสุทธิ</span>
+                    <span>{t('detail.netTotal')}</span>
                     <span>{fmt(previewTotal)}</span>
                   </div>
                 </div>
@@ -980,7 +983,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
               type="text"
               value={discountNote}
               onChange={(e) => setDiscountNote(e.target.value)}
-              placeholder="หมายเหตุ (ไม่บังคับ)"
+              placeholder={t('detail.noteOptional')}
               maxLength={100}
               className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
             />
@@ -992,14 +995,14 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
                 onClick={() => { setShowDiscount(false); setError(''); setDiscountInput(''); setDiscountNote('') }}
                 className="btn-secondary flex-1 py-3"
               >
-                ยกเลิก
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleApplyDiscount}
                 disabled={processing}
                 className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition disabled:opacity-50"
               >
-                {processing ? <span className="spinner-sm" /> : 'ใส่ส่วนลด'}
+                {processing ? <span className="spinner-sm" /> : t('detail.applyDiscount')}
               </button>
             </div>
           </div>
@@ -1013,16 +1016,16 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
             <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 size={40} className="text-emerald-500" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">ชำระเงินสำเร็จ</h3>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">{t('detail.paymentSuccess')}</h3>
             <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-1">{fmt(grandTotal)}</p>
             {discountAmt > 0 && (
               <p className="text-xs text-orange-500">ส่วนลด -{fmt(discountAmt)}</p>
             )}
             <div className="mt-2 space-y-1">
               {session.table_label && (
-                <p className="text-sm text-muted">โต๊ะ {session.table_label}</p>
+                <p className="text-sm text-muted">{t('common.table')} {session.table_label}</p>
               )}
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-slate-600 dark:text-stone-500">
                 {paidSuccess.method}
               </p>
             </div>
@@ -1030,7 +1033,7 @@ export default function SessionDetailModal({ session: initialSession, shop, prof
               onClick={() => { setPaidSuccess(null); onClose() }}
               className="mt-6 w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition"
             >
-              ตกลง
+              {t('detail.ok')}
             </button>
           </div>
         </div>

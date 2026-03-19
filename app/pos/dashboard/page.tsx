@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
 import { Banknote, BarChart3, Receipt, TrendingUp } from 'lucide-react'
+import { useI18n } from '@/lib/i18n/context'
 
 interface Stats {
   totalSales: number
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('today')
+  const { t } = useI18n()
 
   const fetchStats = useCallback(async () => {
     if (!shop?.id) return
@@ -48,7 +50,6 @@ export default function DashboardPage() {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1)
       }
 
-      // End of today (start of tomorrow)
       const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
 
       const { data: orders } = await supabase.from('orders')
@@ -62,7 +63,6 @@ export default function DashboardPage() {
       const totalSales = Math.round((orders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0) * 100) / 100
       const avgPerOrder = orderCount > 0 ? Math.round((totalSales / orderCount) * 100) / 100 : 0
 
-      // Fetch payment breakdown (cash vs transfer)
       let cashTotal = 0
       let transferTotal = 0
       if (orderCount > 0 && orders) {
@@ -124,63 +124,29 @@ export default function DashboardPage() {
 
   useEffect(() => { if (shop?.id) fetchStats() }, [shop?.id, fetchStats])
 
-  const STAT_CARDS: { label: string; value: string; Icon: typeof TrendingUp; bg: string; iconBg: string; iconColor: string; valueColor: string; small?: boolean }[] = [
-    {
-      label: 'ยอดขายรวม',
-      value: fmt(stats.totalSales),
-      Icon: TrendingUp,
-      bg: 'bg-green-50 dark:bg-green-900/20',
-      iconBg: 'bg-green-100 dark:bg-green-900/40',
-      iconColor: 'text-green-600 dark:text-green-400',
-      valueColor: 'text-green-700 dark:text-green-300',
-    },
-    {
-      label: 'ออเดอร์',
-      value: stats.orderCount.toString(),
-      Icon: Receipt,
-      bg: 'bg-blue-50 dark:bg-blue-900/20',
-      iconBg: 'bg-blue-100 dark:bg-blue-900/40',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      valueColor: 'text-blue-700 dark:text-blue-300',
-    },
-    {
-      label: 'เงินสด / โอน',
-      value: `${fmt(stats.cashTotal)} / ${fmt(stats.transferTotal)}`,
-      Icon: Banknote,
-      bg: 'bg-primary-50 dark:bg-primary-900/20',
-      iconBg: 'bg-primary-100 dark:bg-primary-900/40',
-      iconColor: 'text-primary-600 dark:text-primary-400',
-      valueColor: 'text-primary-700 dark:text-primary-300',
-      small: true,
-    },
-    {
-      label: 'เฉลี่ย/ออเดอร์',
-      value: fmt(stats.avgPerOrder),
-      Icon: BarChart3,
-      bg: 'bg-orange-50 dark:bg-orange-900/20',
-      iconBg: 'bg-orange-100 dark:bg-orange-900/40',
-      iconColor: 'text-orange-600 dark:text-orange-400',
-      valueColor: 'text-orange-700 dark:text-orange-300',
-    },
+  const STAT_CARDS: { label: string; value: string; Icon: typeof TrendingUp; color: string; small?: boolean }[] = [
+    { label: t('dashboard.totalSales'), value: fmt(stats.totalSales), Icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400' },
+    { label: t('dashboard.orders'), value: stats.orderCount.toString(), Icon: Receipt, color: 'text-blue-600 dark:text-blue-400' },
+    { label: t('dashboard.cashTransfer'), value: `${fmt(stats.cashTotal)} / ${fmt(stats.transferTotal)}`, Icon: Banknote, color: 'text-primary-600 dark:text-primary-400', small: true },
+    { label: t('dashboard.avgOrder'), value: fmt(stats.avgPerOrder), Icon: BarChart3, color: 'text-amber-600 dark:text-amber-400' },
   ]
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
-      {/* Header */}
       <div className="page-header">
-        <h1 className="page-title">สรุปยอด</h1>
-        <div className="flex gap-1.5">
+        <h1 className="page-title">{t('dashboard.title')}</h1>
+        <div className="flex gap-px bg-stone-100 dark:bg-stone-800 rounded-lg p-0.5">
           {(['today', 'week', 'month'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setDateRange(r)}
-              className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+              className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 dateRange === r
-                  ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/25'
-                  : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'
+                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-700'
               }`}
             >
-              {r === 'today' ? 'วันนี้' : r === 'week' ? '7 วัน' : 'เดือนนี้'}
+              {r === 'today' ? t('dashboard.today') : r === 'week' ? t('dashboard.week') : t('dashboard.month')}
             </button>
           ))}
         </div>
@@ -188,59 +154,60 @@ export default function DashboardPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
+          <div className="spinner" style={{ width: 28, height: 28, borderWidth: 2.5 }} />
         </div>
       ) : !shop ? (
         <div className="text-center py-20 text-muted">
-          <BarChart3 size={40} strokeWidth={1.5} className="mx-auto mb-3" />
-          <p>ไม่พบข้อมูลร้านค้า</p>
+          <BarChart3 size={32} strokeWidth={1.5} className="mx-auto mb-3" />
+          <p className="text-sm">{t('dashboard.noShop')}</p>
         </div>
       ) : (
         <>
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            {STAT_CARDS.map(({ label, value, Icon, bg, iconBg, iconColor, valueColor, small }) => (
-              <div key={label} className={`${bg} rounded-2xl p-4 border border-transparent animate-fade-in`}>
-                <div className={`w-9 h-9 ${iconBg} rounded-xl flex items-center justify-center mb-3`}>
-                  <Icon size={17} className={iconColor} />
-                </div>
-                <p className={`${small ? 'text-lg' : 'text-2xl'} font-bold tracking-tight ${valueColor} mb-0.5`}>{value}</p>
-                <p className="text-xs font-medium text-gray-500 dark:text-slate-400">{label}</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+            {STAT_CARDS.map(({ label, value, Icon, color, small }) => (
+              <div key={label} className="stat-card">
+                <Icon size={16} className={`${color} mb-3`} />
+                <p className={`${small ? 'text-base' : 'text-2xl'} font-display font-bold text-stone-900 dark:text-stone-100 mb-0.5`}>{value}</p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">{label}</p>
               </div>
             ))}
           </div>
 
-          {/* Top Products */}
           {topProducts.length > 0 ? (
-            <div className="section-card p-5">
-              <h2 className="font-bold text-gray-900 dark:text-slate-100 mb-4 text-sm">สินค้าขายดี (Top 5)</h2>
-              <div className="space-y-3">
-                {topProducts.map((product, index) => (
-                  <div key={product.product_id} className="flex items-center gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-primary-50 dark:bg-primary-950/60 text-primary-700 dark:text-primary-400 text-xs font-bold flex items-center justify-center shrink-0 border border-primary-100 dark:border-primary-900/50">
-                      {index + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-slate-100 truncate text-sm">
-                        {product.product_name}
-                      </p>
+            <div className="section-card">
+              <div className="px-5 py-4 border-b border-stone-100 dark:border-stone-800">
+                <h2 className="text-sm font-medium text-stone-900 dark:text-stone-100">{t('dashboard.topProducts')}</h2>
+              </div>
+              <div className="divide-y divide-stone-100 dark:divide-stone-800">
+                {topProducts.map((product, index) => {
+                  const maxQty = topProducts[0]?.total_qty || 1
+                  const percent = (product.total_qty / maxQty) * 100
+                  return (
+                    <div key={product.product_id} className="px-5 py-3 flex items-center gap-3">
+                      <span className="w-6 h-6 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-500 text-xs font-medium flex items-center justify-center shrink-0">
+                        {index + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-sm text-stone-900 dark:text-stone-100 truncate">{product.product_name}</p>
+                          <div className="text-right shrink-0 ml-3">
+                            <span className="text-sm font-medium text-stone-900 dark:text-stone-100">{product.total_qty} {t('common.pcs')}</span>
+                            <span className="text-xs text-stone-400 ml-2">{fmt(product.total_revenue)}</span>
+                          </div>
+                        </div>
+                        <div className="h-1 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-primary-500 rounded-full transition-all duration-500" style={{ width: `${percent}%` }} />
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">
-                        {product.total_qty} ชิ้น
-                      </p>
-                      <p className="text-xs text-muted">
-                        {fmt(product.total_revenue)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ) : (
             <div className="text-center py-16 text-muted">
-              <BarChart3 size={36} strokeWidth={1.5} className="mx-auto mb-3" />
-              <p className="font-medium text-sm">ยังไม่มียอดขายในช่วงเวลานี้</p>
+              <BarChart3 size={28} strokeWidth={1.5} className="mx-auto mb-3" />
+              <p className="text-sm">{t('dashboard.noSales')}</p>
             </div>
           )}
         </>

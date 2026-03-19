@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
+import { useI18n } from '@/lib/i18n/context'
 import type { CustomerSession } from '@/lib/types'
 import { QRCodeSVG } from 'qrcode.react'
 import { buildOrderUrl } from '@/lib/qr'
@@ -30,24 +31,24 @@ interface OrderDetail {
   items: OrderItem[]
 }
 
-const SESSION_STATUS_LABEL: Record<string, string> = {
-  active: 'กำลังใช้งาน',
-  paid: 'ชำระแล้ว',
-  cancelled: 'ยกเลิก',
+const SESSION_STATUS_LABEL_KEYS: Record<string, string> = {
+  active: 'history.statusActive',
+  paid: 'history.statusPaid',
+  cancelled: 'history.statusCancelled',
 }
 
 const SESSION_STATUS_STYLE: Record<string, string> = {
   active: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400',
   paid: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-  cancelled: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
+  cancelled: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-stone-500',
 }
 
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  pending: 'รอรับออเดอร์',
-  preparing: 'กำลังทำ',
-  ready: 'พร้อมเสิร์ฟ',
-  completed: 'เสร็จแล้ว',
-  cancelled: 'ยกเลิก',
+const ORDER_STATUS_LABEL_KEYS: Record<string, string> = {
+  pending: 'history.orderPending',
+  preparing: 'history.orderPreparing',
+  ready: 'history.orderReady',
+  completed: 'history.orderCompleted',
+  cancelled: 'history.orderCancelled',
 }
 
 const ORDER_STATUS_STYLE: Record<string, string> = {
@@ -63,6 +64,7 @@ function fmt(n: number) {
 }
 
 export default function SessionHistoryPage() {
+  const { t } = useI18n()
   const supabase = createClient()
   const { shop } = usePosContext()
   const [sessions, setSessions] = useState<HistorySession[]>([])
@@ -83,7 +85,7 @@ export default function SessionHistoryPage() {
   const fetchHistory = useCallback(async () => {
     if (!shop?.id) return
     if (dateFrom > dateTo) {
-      setDateError('วันเริ่มต้นต้องไม่มากกว่าวันสิ้นสุด')
+      setDateError(t('history.dateError'))
       setSessions([])
       return
     }
@@ -193,20 +195,20 @@ export default function SessionHistoryPage() {
       <div className="flex items-center gap-3 mb-6">
         <a
           href="/pos/sessions"
-          className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          className="p-2 rounded-xl text-stone-400 dark:text-stone-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
         >
           <ArrowLeft size={18} />
         </a>
         <div>
-          <h1 className="page-title">ประวัติ QR Sessions</h1>
-          <p className="text-muted text-sm">กดที่รายการเพื่อดูรายละเอียดออเดอร์</p>
+          <h1 className="page-title">{t('history.title')}</h1>
+          <p className="text-muted text-sm">{t('history.subtitle')}</p>
         </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 mb-5 flex flex-wrap gap-3 items-end shadow-sm">
         <div>
-          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">ตั้งแต่วันที่</label>
+          <label className="block text-xs font-medium text-slate-500 dark:text-stone-500 mb-1">{t('history.dateFrom')}</label>
           <input
             type="date"
             value={dateFrom}
@@ -215,7 +217,7 @@ export default function SessionHistoryPage() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">ถึงวันที่</label>
+          <label className="block text-xs font-medium text-slate-500 dark:text-stone-500 mb-1">{t('history.dateTo')}</label>
           <input
             type="date"
             value={dateTo}
@@ -224,16 +226,16 @@ export default function SessionHistoryPage() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">สถานะ</label>
+          <label className="block text-xs font-medium text-slate-500 dark:text-stone-500 mb-1">{t('history.status')}</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
             className="input w-auto text-sm"
           >
-            <option value="all">ทั้งหมด</option>
-            <option value="active">กำลังใช้งาน</option>
-            <option value="paid">ชำระแล้ว</option>
-            <option value="cancelled">ยกเลิก</option>
+            <option value="all">{t('common.all')}</option>
+            <option value="active">{t('history.statusActive')}</option>
+            <option value="paid">{t('history.statusPaid')}</option>
+            <option value="cancelled">{t('history.statusCancelled')}</option>
           </select>
         </div>
         <button
@@ -241,7 +243,7 @@ export default function SessionHistoryPage() {
           className="btn-primary px-4 py-2.5 text-sm flex items-center gap-1.5"
         >
           <Search size={14} />
-          ค้นหา
+          {t('common.search')}
         </button>
       </div>
       {dateError && (
@@ -254,15 +256,15 @@ export default function SessionHistoryPage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="spinner w-8 h-8 border-[3px]" />
-          <p className="text-muted text-sm">กำลังโหลด...</p>
+          <p className="text-muted text-sm">{t('history.loading')}</p>
         </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-12 text-muted">ไม่พบ session ในช่วงเวลานี้</div>
+        <div className="text-center py-12 text-muted">{t('history.noSessions')}</div>
       ) : (
         <>
         {sessions.length >= 100 && (
           <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm px-4 py-2.5 rounded-xl border border-amber-200 dark:border-amber-800/40 mb-4">
-            แสดง 100 รายการล่าสุด — ลองเลือกช่วงเวลาที่สั้นลง
+            {t('history.limit100')}
           </div>
         )}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 shadow-sm overflow-hidden">
@@ -275,10 +277,10 @@ export default function SessionHistoryPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-slate-900 dark:text-slate-100">
-                    {session.table_label ? `โต๊ะ ${session.table_label}` : 'ไม่ระบุโต๊ะ'}
+                    {session.table_label ? `${t('common.table')} ${session.table_label}` : t('common.noTable')}
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SESSION_STATUS_STYLE[session.status]}`}>
-                    {SESSION_STATUS_LABEL[session.status]}
+                    {t(SESSION_STATUS_LABEL_KEYS[session.status])}
                   </span>
                 </div>
                 <p className="text-xs text-muted mt-0.5">
@@ -292,9 +294,9 @@ export default function SessionHistoryPage() {
                   className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5"
                 >
                   <Printer size={14} />
-                  พิมพ์ QR ซ้ำ
+                  {t('history.reprintQR')}
                 </button>
-                <ChevronRight size={16} className="text-slate-400 dark:text-slate-500" />
+                <ChevronRight size={16} className="text-stone-400 dark:text-stone-500 dark:text-slate-500" />
               </div>
             </button>
           ))}
@@ -313,17 +315,17 @@ export default function SessionHistoryPage() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
               <div>
                 <h2 className="font-semibold text-slate-900 dark:text-slate-100">
-                  {detailSession.table_label ? `โต๊ะ ${detailSession.table_label}` : 'ไม่ระบุโต๊ะ'}
+                  {detailSession.table_label ? `${t('common.table')} ${detailSession.table_label}` : t('common.noTable')}
                 </h2>
                 <p className="text-xs text-muted mt-0.5">
                   {new Date(detailSession.created_at).toLocaleString('th-TH')}
                   {' · '}
                   <span className={`inline-block px-1.5 py-0.5 rounded font-medium ${SESSION_STATUS_STYLE[detailSession.status]}`}>
-                    {SESSION_STATUS_LABEL[detailSession.status]}
+                    {t(SESSION_STATUS_LABEL_KEYS[detailSession.status])}
                   </span>
                 </p>
               </div>
-              <button onClick={() => setDetailSession(null)} className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+              <button onClick={() => setDetailSession(null)} className="p-2 rounded-xl text-stone-400 dark:text-stone-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
                 <X size={18} />
               </button>
             </div>
@@ -335,7 +337,7 @@ export default function SessionHistoryPage() {
                   <div className="spinner w-7 h-7 border-[3px]" />
                 </div>
               ) : detailOrders.length === 0 ? (
-                <p className="text-center text-muted py-10">ไม่มีออเดอร์ใน session นี้</p>
+                <p className="text-center text-muted py-10">{t('history.noOrdersInSession')}</p>
               ) : (
                 <div className="space-y-4">
                   {detailOrders.map((order, idx) => {
@@ -344,12 +346,12 @@ export default function SessionHistoryPage() {
                     <div key={order.id} className={`rounded-xl overflow-hidden border ${isCancelled ? 'border-red-200 dark:border-red-800/40 opacity-70' : 'border-slate-100 dark:border-slate-700/50'}`}>
                       <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isCancelled ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40' : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-700/50'}`}>
                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                          ออเดอร์ #{idx + 1}
+                          {t('history.orderNum', { num: idx + 1 })}
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted">{new Date(order.created_at).toLocaleTimeString('th-TH')}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ORDER_STATUS_STYLE[order.status] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
-                            {ORDER_STATUS_LABEL[order.status] ?? order.status}
+                            {t(ORDER_STATUS_LABEL_KEYS[order.status]) ?? order.status}
                           </span>
                         </div>
                       </div>
@@ -358,14 +360,14 @@ export default function SessionHistoryPage() {
                           <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className={`text-xs font-semibold w-5 shrink-0 ${isCancelled ? 'text-red-400 dark:text-red-500' : 'text-primary-600 dark:text-primary-400'}`}>×{item.quantity}</span>
-                              <span className={`text-sm truncate ${isCancelled ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>{item.product?.name ?? '-'}</span>
+                              <span className={`text-sm truncate ${isCancelled ? 'line-through text-stone-400 dark:text-stone-500 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>{item.product?.name ?? '-'}</span>
                             </div>
-                            <span className={`text-sm shrink-0 ml-2 ${isCancelled ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}`}>{fmt(item.subtotal)}</span>
+                            <span className={`text-sm shrink-0 ml-2 ${isCancelled ? 'line-through text-stone-400 dark:text-stone-500 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}`}>{fmt(item.subtotal)}</span>
                           </div>
                         ))}
                       </div>
                       <div className={`flex justify-end px-4 py-2.5 border-t ${isCancelled ? 'border-red-200 dark:border-red-800/30 bg-red-50/30 dark:bg-red-900/10' : 'border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/50'}`}>
-                        <span className={`text-sm font-semibold ${isCancelled ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}`}>{fmt(order.total_amount)}</span>
+                        <span className={`text-sm font-semibold ${isCancelled ? 'line-through text-stone-400 dark:text-stone-500 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}`}>{fmt(order.total_amount)}</span>
                       </div>
                     </div>
                     )
@@ -377,7 +379,7 @@ export default function SessionHistoryPage() {
             {/* Modal Footer */}
             {detailSession.total_amount > 0 && (
               <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <span className="font-medium text-slate-700 dark:text-slate-300">ยอดรวมทั้งหมด</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">{t('history.grandTotal')}</span>
                 <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{fmt(detailSession.total_amount)}</span>
               </div>
             )}

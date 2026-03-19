@@ -1,12 +1,21 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Kanit, Sarabun } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/lib/theme-provider'
+import { I18nProvider } from '@/lib/i18n/context'
 
-const inter = Inter({
-  subsets: ['latin'],
+const kanit = Kanit({
+  subsets: ['thai', 'latin'],
+  weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
-  variable: '--font-inter',
+  variable: '--font-kanit',
+})
+
+const sarabun = Sarabun({
+  subsets: ['thai', 'latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-sarabun',
 })
 
 export const viewport: Viewport = {
@@ -23,13 +32,13 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'QRforPay',
   description: 'QR-based ordering and payment system for modern cafés',
-  metadataBase: new URL('https://kopicha.vercel.app'),
+  metadataBase: new URL('https://qrforpaytest.vercel.app'),
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'QRforPay' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="th" className={inter.variable} suppressHydrationWarning>
+    <html lang="th" className={`${kanit.variable} ${sarabun.variable}`} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://nooljfpynicvckfbsaba.supabase.co" />
         <link rel="dns-prefetch" href="https://nooljfpynicvckfbsaba.supabase.co" />
@@ -41,7 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen font-sans">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider><I18nProvider>{children}</I18nProvider></ThemeProvider>
       </body>
     </html>
   )

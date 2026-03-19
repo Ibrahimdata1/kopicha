@@ -9,7 +9,7 @@ import { useI18n } from '@/lib/i18n/context'
 import type { Shop } from '@/lib/types'
 
 const MONTHLY_FEE = 199
-const SETUP_FEE = 999
+const SETUP_FEE = 1399
 const TRIAL_DAYS = 7
 
 interface Props {

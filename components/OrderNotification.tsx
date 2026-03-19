@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { Bell, Check, ShoppingBag } from 'lucide-react'
+import { useI18n } from '@/lib/i18n/context'
 
 interface NewOrder {
   id: string
@@ -22,6 +23,7 @@ function fmt(n: number | null | undefined) {
 }
 
 export default function OrderNotification({ shopId }: Props) {
+  const { t } = useI18n()
   const supabase = createClient()
   const [queue, setQueue] = useState<NewOrder[]>([])
   const seenIds = useRef<Set<string>>(new Set())
@@ -173,12 +175,12 @@ export default function OrderNotification({ shopId }: Props) {
             <Bell size={20} className="text-white" />
           </div>
           <div className="flex-1">
-            <h3 className="text-white font-bold text-base">ออเดอร์ใหม่!</h3>
+            <h3 className="text-white font-bold text-base">{t('notify.newOrder')}</h3>
             <p className="text-white/80 text-sm">
-              {current.table_number ? `โต๊ะ ${current.table_number}` : 'ไม่ระบุโต๊ะ'}
+              {current.table_number ? t('notify.table', { table: current.table_number }) : t('common.noTable')}
               {queue.length > 1 && (
                 <span className="ml-2 bg-white/30 text-white text-xs px-2 py-0.5 rounded-full font-bold">
-                  +{queue.length - 1} รออีก
+                  +{queue.length - 1} {t('notify.moreWaiting')}
                 </span>
               )}
             </p>
@@ -190,8 +192,8 @@ export default function OrderNotification({ shopId }: Props) {
         <div className="px-5 py-4">
           <div className="flex items-center gap-1.5 mb-3">
             <ShoppingBag size={14} className="text-gray-400 dark:text-slate-500" />
-            <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">
-              รายการที่สั่ง ({current.items.length})
+            <span className="text-xs font-semibold text-gray-500 dark:text-stone-500">
+              {t('notify.orderedItems', { count: current.items.length })}
             </span>
           </div>
           <div className="space-y-2 max-h-[200px] overflow-y-auto">
@@ -213,7 +215,7 @@ export default function OrderNotification({ shopId }: Props) {
             className="w-full py-3.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-base active:scale-[0.98]"
           >
             <Check size={18} strokeWidth={3} />
-            รับออเดอร์
+            {t('notify.acknowledge')}
           </button>
         </div>
       </div>

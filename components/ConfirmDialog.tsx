@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { AlertTriangle, HelpCircle } from 'lucide-react'
+import { useI18n } from '@/lib/i18n/context'
 
 interface ConfirmOptions {
   title: string
@@ -16,6 +17,7 @@ interface DialogState extends ConfirmOptions {
 }
 
 export function useConfirm() {
+  const { t } = useI18n()
   const [dialog, setDialog] = useState<DialogState | null>(null)
 
   const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
@@ -66,7 +68,7 @@ export function useConfirm() {
             onClick={handleCancel}
             className="btn-secondary flex-1 py-2.5 text-sm"
           >
-            {dialog.cancelLabel ?? 'ยกเลิก'}
+            {dialog.cancelLabel ?? t('common.cancel')}
           </button>
           <button
             onClick={handleConfirm}
@@ -76,7 +78,7 @@ export function useConfirm() {
                 : 'btn-primary'
             }`}
           >
-            {dialog.confirmLabel ?? 'ยืนยัน'}
+            {dialog.confirmLabel ?? t('common.confirm')}
           </button>
         </div>
       </div>

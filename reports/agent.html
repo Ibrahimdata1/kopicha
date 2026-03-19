@@ -1,0 +1,149 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Helvetica Neue',sans-serif;color:#1e293b;font-size:11.5px;line-height:1.4}
+.cover{page-break-after:always;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.cover h1{font-size:2rem;margin-bottom:6px}
+.cover .badge{display:inline-block;padding:6px 20px;border-radius:10px;color:white;font-size:0.95rem;font-weight:700;margin:12px 0}
+.cover .sub{color:#64748b;font-size:0.9rem}
+.cover .date{color:#94a3b8;font-size:0.75rem;margin-top:14px}
+
+.page{padding:20px 24px;page-break-before:always}
+.page:first-of-type{page-break-before:auto}
+h2{font-size:1.15rem;color:#1e40af;margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.num{display:inline-block;padding:2px 8px;border-radius:5px;color:white;font-size:0.72rem;font-weight:700}
+.desc{font-size:0.75rem;color:#64748b;margin-bottom:6px}
+.pre{padding:5px 10px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:0 5px 5px 0;font-size:0.72rem;color:#1e40af;margin-bottom:10px}
+
+.step{display:flex;gap:6px;margin-bottom:4px}
+.sn{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:0.65rem;flex-shrink:0;margin-top:1px}
+.sb h4{font-size:0.78rem;font-weight:700;margin-bottom:1px}
+.sb p{font-size:0.7rem;color:#64748b;line-height:1.3}
+.arr{padding:0 0 0 7px;color:#cbd5e1;font-size:0.7rem;margin:-1px 0;line-height:1}
+
+.sc{border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:6px;page-break-inside:avoid;max-width:380px;margin-left:auto;margin-right:auto}
+.sc.missing{border:2px dashed #f87171;background:#fef2f2}
+.sc img{width:100%;max-height:220px;object-fit:contain;object-position:top;display:block;background:#f8fafc}
+.sc-label{padding:3px 6px;background:#f1f5f9;font-size:0.6rem;color:#475569;text-align:center;border-top:1px solid #e2e8f0;font-weight:500}
+.sc-row{display:flex;gap:6px;max-width:480px;margin-left:auto;margin-right:auto}
+.sc-row .sc{flex:1;min-width:0;max-width:none}
+
+.note{padding:5px 8px;border-radius:4px;font-size:0.68rem;line-height:1.3;margin:4px 0}
+.note.i{background:#eff6ff;color:#1e40af;border-left:2px solid #3b82f6}
+.note.w{background:#fef3c7;color:#92400e;border-left:2px solid #f59e0b}
+.note.d{background:#fef2f2;color:#991b1b;border-left:2px solid #ef4444}
+
+table{width:100%;border-collapse:collapse;font-size:0.68rem;margin:6px 0}
+th{text-align:left;padding:4px 6px;background:#f1f5f9;color:#1e40af;font-weight:600;border:1px solid #e2e8f0}
+td{padding:4px 6px;border:1px solid #e2e8f0;vertical-align:top}
+tr:nth-child(even){background:#fafafa}
+.mono{font-family:monospace;font-size:0.65rem;background:#f1f5f9;padding:1px 3px;border-radius:2px}
+.tag{display:inline-block;padding:1px 5px;border-radius:3px;font-size:0.6rem;font-weight:600;color:white}
+.tag.r{background:#ef4444}.tag.g{background:#22c55e}.tag.b{background:#3b82f6}.tag.y{background:#f59e0b}.tag.p{background:#8b5cf6}
+</style></head><body>
+<div class="cover"><h1>QA Test Document</h1><div class="badge" style="background:#d97706">Agent (ตัวแทนขาย)</div><div class="sub">QRforPay POS — ระบบตัวแทนขาย + Referral</div><div class="date">March 2026 | QA Professional — ตรวจสอบจากโค้ดจริงทุก condition</div></div>
+
+<!-- ═══ สมัครตัวแทนขาย ═══ -->
+<div class="page">
+<h2><span class="num" style="background:#d97706">AG-01</span> สมัครเป็นตัวแทนขาย</h2>
+<div class="desc">สมัครจากหน้า /register โดยกดแท็บ "สมัครตัวแทนขาย" — ไม่ต้อง login, ไม่ต้องสร้าง account</div>
+<div class="pre">Precondition: ไม่ต้องมี account ในระบบ เปิดหน้าเว็บได้เลย</div>
+
+<div class="step"><div class="sn" style="background:#d97706">1</div><div class="sb"><h4>เปิดเว็บ → Landing Page</h4><p>เห็น nav bar มีปุ่ม "เข้าสู่ระบบ" + "สมัครเลย" + scroll ล่างสุดมี section "สนใจเป็นตัวแทนขาย"</p></div></div><div class="arr">↓</div>
+<div class="sc missing"><div class="sc-label">MISSING: S01-1-landing.png — Landing Page — nav: เข้าสู่ระบบ + สมัครเลย</div></div>
+
+<div class="step"><div class="sn" style="background:#d97706">2</div><div class="sb"><h4>กดปุ่ม "สมัครเลย" → หน้า /register</h4><p>เห็น Mode Selector 2 tabs: "สมัครร้านค้า" (default) / "สมัครตัวแทนขาย"</p></div></div><div class="arr">↓</div>
+<div class="sc missing"><div class="sc-label">MISSING: S01-2-register-step1.png — หน้า Register — default เลือก "สมัครร้านค้า"</div></div>
+
+<div class="step"><div class="sn" style="background:#d97706">3</div><div class="sb"><h4>กดแท็บ "สมัครตัวแทนขาย"</h4><p>เปลี่ยนฟอร์มในหน้าเดียว ไม่ redirect — ไอคอนเปลี่ยนเป็น Handshake สีส้ม</p></div></div><div class="arr">↓</div>
+<div class="sc missing"><div class="sc-label">MISSING: partner-register.png — แท็บ "สมัครตัวแทนขาย" — ฟอร์มกรอกชื่อ + เบอร์</div></div>
+
+<div class="step"><div class="sn" style="background:#d97706">4</div><div class="sb"><h4>กรอกข้อมูล + กด "รับรหัสตัวแทน"</h4><p>กรอก ชื่อ-นามสกุล + เบอร์โทร → กดสมัคร</p></div></div><div class="arr">↓</div>
+
+<div class="step"><div class="sn" style="background:#d97706">5</div><div class="sb"><h4>ได้รหัสตัวแทน + Referral Link</h4><p>แสดงรหัส AG-xxx + ลิงก์สมัครร้านค้า /register?ref=CODE + ปุ่ม copy</p></div></div>
+
+<h4 style="color:#1e40af;margin:8px 0 4px;">Validation — สมัครตัวแทน</h4>
+<table>
+<tr><th>Field</th><th>Rule</th><th>Error Message (Thai)</th></tr>
+<tr><td><strong>ชื่อ-นามสกุล</strong></td><td>Required, trim(), min 2 ตัวอักษร</td><td>"กรุณากรอกชื่อ (อย่างน้อย 2 ตัว)"</td></tr>
+<tr><td><strong>เบอร์โทร</strong></td><td>Required, 10 หลักเท่านั้น<br>
+ต้องขึ้นต้นด้วย 0<br>
+✅ มือถือ: 06x, 08x, 09x<br>
+❌ บ้าน (02-05) ไม่รับ — ตัวแทนต้องใช้มือถือ<br>
+❌ พิมพ์ตัวอักษรไม่ได้ (digits only)<br>
+maxLength=10</td><td>
+"กรุณากรอกเบอร์โทร" (ว่าง)<br>
+"เบอร์โทรต้อง 10 หลัก"<br>
+"เบอร์โทรต้องขึ้นต้นด้วย 0"<br>
+"เบอร์โทรต้องขึ้นต้นด้วย 06, 08 หรือ 09"</td></tr>
+</table>
+
+<h4 style="color:#1e40af;margin:8px 0 4px;">Agent Code Generation</h4>
+<table>
+<tr><th>ส่วน</th><th>Logic</th><th>ตัวอย่าง</th></tr>
+<tr><td>Prefix</td><td>คงที่ "AG-"</td><td>AG-</td></tr>
+<tr><td>ชื่อ</td><td>trim → UPPERCASE → ลบ space → ตัด 8 ตัวแรก</td><td>SOMCHAI</td></tr>
+<tr><td>Random</td><td>4 ตัว alphanumeric (base36)</td><td>X4K2</td></tr>
+<tr><td><strong>ผลลัพธ์</strong></td><td></td><td><strong>AG-SOMCHAI-X4K2</strong></td></tr>
+</table>
+
+<h4 style="color:#1e40af;margin:8px 0 4px;">Edge Cases</h4>
+<table>
+<tr><th>กรณี</th><th>ผลลัพธ์</th></tr>
+<tr><td>Code ซ้ำใน DB (duplicate)</td><td>ระบบ retry สร้าง code ใหม่อัตโนมัติ (random suffix ใหม่)</td></tr>
+<tr><td>Retry ซ้ำอีก</td><td>แสดง error</td></tr>
+<tr><td>ชื่อสั้น 1 ตัว</td><td>Error: "กรุณากรอกชื่อ (อย่างน้อย 2 ตัว)"</td></tr>
+<tr><td>เบอร์โทร 9 หลัก</td><td>Error: "เบอร์โทรต้อง 10 หลัก"</td></tr>
+<tr><td>เบอร์ขึ้นต้น 02</td><td>Error: "เบอร์โทรต้องขึ้นต้นด้วย 06, 08 หรือ 09"</td></tr>
+<tr><td>เบอร์ขึ้นต้น 1</td><td>Error: "เบอร์โทรต้องขึ้นต้นด้วย 0"</td></tr>
+<tr><td>พิมพ์ตัวอักษร</td><td>พิมพ์ไม่ได้ (input รับเฉพาะตัวเลข)</td></tr>
+<tr><td>พิมพ์เกิน 10 ตัว</td><td>พิมพ์ไม่ได้ (maxLength=10)</td></tr>
+</table>
+
+<h4 style="color:#1e40af;margin:8px 0 4px;">DB Operations</h4>
+<table>
+<tr><th>Table</th><th>Action</th><th>Fields</th></tr>
+<tr><td><span class="mono">agents</span></td><td>INSERT</td><td>name, phone, line_id (null), code, active (default true)</td></tr>
+</table>
+
+<div class="note i">ตัวแทนขายไม่ต้องสร้าง account หรือ login — แค่กรอกชื่อ+เบอร์ก็ได้รหัสเลย</div>
+</div>
+
+<!-- ═══ Referral Flow ═══ -->
+<div class="page">
+<h2><span class="num" style="background:#d97706">AG-02</span> ระบบ Referral — แนะนำร้านค้า</h2>
+<div class="desc">ตัวแทนขายแชร์ลิงก์ให้ร้านอาหาร สมัครผ่านลิงก์ → ไม่ต้องจ่ายค่าแรกเข้า ฿999</div>
+
+<div class="step"><div class="sn" style="background:#d97706">1</div><div class="sb"><h4>ตัวแทนได้ Referral Link</h4><p>หลังสมัครสำเร็จ ได้ลิงก์: /register?ref=AG-SOMCHAI-X4K2</p></div></div><div class="arr">↓</div>
+<div class="step"><div class="sn" style="background:#d97706">2</div><div class="sb"><h4>ตัวแทนส่งลิงก์ให้เจ้าของร้าน</h4><p>ส่งผ่าน LINE / Facebook / ช่องทางอื่น</p></div></div><div class="arr">↓</div>
+<div class="step"><div class="sn" style="background:#d97706">3</div><div class="sb"><h4>เจ้าของร้านกดลิงก์ → หน้า /register</h4><p>ระบบจับ ?ref=CODE จาก URL อัตโนมัติ</p></div></div><div class="arr">↓</div>
+<div class="step"><div class="sn" style="background:#d97706">4</div><div class="sb"><h4>เจ้าของร้านสมัครตามปกติ</h4><p>กรอก Step 1 (account) → Step 2 (shop) → แสดง banner "รหัสตัวแทน: CODE — ไม่ต้องเสียค่าแรกเข้า ฿999"</p></div></div><div class="arr">↓</div>
+<div class="step"><div class="sn" style="background:#d97706">5</div><div class="sb"><h4>สมัครสำเร็จ → ไม่ต้องจ่าย ฿999</h4><p>self_register_shop RPC ส่ง p_referral_code=CODE → shop.referral_code=CODE, setup_fee_paid=true (bypass)</p></div></div>
+
+<h4 style="color:#1e40af;margin:8px 0 4px;">Referral URL Cases</h4>
+<table>
+<tr><th>URL</th><th>ผลลัพธ์</th></tr>
+<tr><td><span class="mono">/register?ref=AG-SOMCHAI-X4K2</span></td><td>แสดง banner สีเหลือง "รหัสตัวแทน: AG-SOMCHAI-X4K2 — ไม่ต้องเสียค่าแรกเข้า ฿999"<br>ส่ง p_referral_code ไปที่ RPC</td></tr>
+<tr><td><span class="mono">/register</span> (ไม่มี ?ref)</td><td>ไม่แสดง banner, ส่ง p_referral_code=null → ต้องจ่าย ฿999 เมื่อหมด trial</td></tr>
+<tr><td><span class="mono">/register?ref=INVALID</span></td><td>ส่ง code ไป RPC — ถ้า code ไม่มีใน agents table ระบบอาจ ignore หรือ error (ขึ้นกับ RPC logic)</td></tr>
+</table>
+
+<h4 style="color:#1e40af;margin:8px 0 4px;">Referral Code ในหน้า Paywall (หลังหมด trial)</h4>
+<table>
+<tr><th>กรณี</th><th>ผลลัพธ์</th></tr>
+<tr><td>ไม่ได้สมัครผ่าน referral + หมด trial</td><td>Paywall ขึ้น — มีช่องกรอก "รหัสตัวแทน" + ปุ่ม ✓</td></tr>
+<tr><td>กรอก code ถูกต้อง (agents table, active=true)</td><td>setup_fee_paid=true → ปิด paywall → ใช้งานต่อได้</td></tr>
+<tr><td>กรอก code ไม่ถูก</td><td>Error: "รหัสตัวแทนไม่ถูกต้อง"</td></tr>
+<tr><td>กรอก code ว่าง</td><td>Error: "กรุณากรอกรหัสตัวแทน"</td></tr>
+</table>
+
+<h4 style="color:#1e40af;margin:8px 0 4px;">รายได้ตัวแทน</h4>
+<table>
+<tr><th>รายการ</th><th>จำนวน</th><th>วิธีเก็บ</th></tr>
+<tr><td>ค่าแนะนำต่อร้าน</td><td>฿999</td><td>ตัวแทนเก็บจากเจ้าของร้านโดยตรง</td></tr>
+<tr><td>ค่ารายเดือน</td><td>-</td><td>ไม่ได้ส่วนแบ่ง (฿199/เดือน จ่ายให้ระบบ)</td></tr>
+</table>
+
+<div class="note w">ตัวแทนขายไม่มี dashboard ดูยอด — แค่ได้รหัส + ลิงก์ แล้วเก็บเงินจากร้านค้าโดยตรง</div>
+<div class="note i">Banner ในหน้า register: "รับ ฿999 ทุกร้านที่แนะนำสำเร็จ" + "แนะนำร้านอาหาร/คาเฟ่ เก็บค่าแนะนำโดยตรง"</div>
+</div>
+</body></html>

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { buildOrderUrl } from '@/lib/qr'
 import type { OrderWithItems, Profile, Shop } from '@/lib/types'
 import type { SessionWithOrders } from '@/components/SessionsView'
+import { useI18n } from '@/lib/i18n/context'
 
 const SessionDetailModal = dynamic(() => import('@/components/SessionDetailModal'), { ssr: false })
 
@@ -40,20 +41,13 @@ function fmtTime(iso: string) {
   return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + time
 }
 
-const BILL_STATUS = {
-  active: { label: 'รอชำระเงิน', badge: 'badge badge-yellow', Icon: Clock, dot: 'bg-amber-400' },
-  paid: { label: 'ชำระแล้ว', badge: 'badge badge-green', Icon: CheckCircle2, dot: 'bg-emerald-400' },
-  cancelled: { label: 'บิลยกเลิก', badge: 'badge badge-red', Icon: XCircle, dot: 'bg-rose-400' },
+const BILL_STATUS_STYLE = {
+  active: { badge: 'badge badge-yellow', Icon: Clock, dot: 'bg-amber-400' },
+  paid: { badge: 'badge badge-green', Icon: CheckCircle2, dot: 'bg-emerald-400' },
+  cancelled: { badge: 'badge badge-red', Icon: XCircle, dot: 'bg-rose-400' },
 } as const
 
 type FilterKey = 'all' | 'active' | 'paid' | 'cancelled'
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'ทั้งหมด' },
-  { key: 'active', label: 'รอชำระเงิน' },
-  { key: 'paid', label: 'ชำระแล้ว' },
-  { key: 'cancelled', label: 'บิลยกเลิก' },
-]
 
 interface Props {
   shop: Shop
@@ -61,6 +55,7 @@ interface Props {
 }
 
 export default function OrdersView({ shop, profile }: Props) {
+  const { t } = useI18n()
   const supabase = createClient()
   const [bills, setBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
@@ -173,24 +168,29 @@ export default function OrdersView({ shop, profile }: Props) {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       <div className="page-header">
-        <h1 className="page-title">บิลทั้งหมด</h1>
-        <button onClick={fetchBills} className="btn-secondary px-3 py-1.5 text-sm">↻ รีเฟรช</button>
+        <h1 className="page-title">{t('orders.allBills')}</h1>
+        <button onClick={fetchBills} className="btn-secondary px-3 py-1.5 text-sm">↻ {t('orders.refresh')}</button>
       </div>
 
       <div className="flex gap-2 overflow-x-auto scrollbar-hide mb-5 pb-1">
-        {FILTERS.map((tab) => (
+        {([
+          { key: 'all' as FilterKey, label: t('common.all') },
+          { key: 'active' as FilterKey, label: t('orders.pendingPayment') },
+          { key: 'paid' as FilterKey, label: t('orders.paid') },
+          { key: 'cancelled' as FilterKey, label: t('orders.billCancelled') },
+        ]).map((tab) => (
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
             className={`shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
               filter === tab.key
                 ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/25'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-stone-500 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
             }`}
           >
             {tab.label}
             {filter !== tab.key && counts[tab.key] > 0 && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-stone-500">
                 {counts[tab.key]}
               </span>
             )}
@@ -205,30 +205,31 @@ export default function OrdersView({ shop, profile }: Props) {
       ) : bills.length === 0 ? (
         <div className="text-center py-16 text-muted">
           <Receipt size={36} strokeWidth={1.5} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-          <p className="text-sm">ไม่มีบิล</p>
+          <p className="text-sm">{t('orders.noBills')}</p>
         </div>
       ) : (
         <div className="section-card divide-y divide-slate-50 dark:divide-slate-700/50 animate-fade-in">
           {bills.map((bill) => {
-            const statusInfo = BILL_STATUS[bill.status]
+            const statusStyle = BILL_STATUS_STYLE[bill.status]
+            const statusLabel = bill.status === 'active' ? t('orders.pendingPayment') : bill.status === 'paid' ? t('orders.paid') : t('orders.billCancelled')
             return (
               <button key={bill.id} onClick={() => handleBillClick(bill)} disabled={loadingDetail} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors w-full text-left cursor-pointer">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${statusInfo.dot}`} />
+                <div className={`w-2 h-2 rounded-full shrink-0 ${statusStyle.dot}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className={statusInfo.badge}>{statusInfo.label}</span>
+                    <span className={statusStyle.badge}>{statusLabel}</span>
                     {bill.table_label && (
-                      <span className="text-xs font-bold text-primary-600 dark:text-primary-400">โต๊ะ {bill.table_label}</span>
+                      <span className="text-xs font-bold text-primary-600 dark:text-primary-400">{t('common.table')} {bill.table_label}</span>
                     )}
                   </div>
                   <p className="text-xs text-subtle">{fmtTime(bill.created_at)}</p>
                 </div>
                 <span className="text-xs text-muted shrink-0">
-                  {bill.item_count > 0 ? `${bill.item_count} รายการ` : '—'}
+                  {bill.item_count > 0 ? `${bill.item_count} ${t('common.items')}` : '—'}
                 </span>
                 <p className={`font-bold text-base shrink-0 ${
                   bill.status === 'paid' ? 'text-emerald-600 dark:text-emerald-400' :
-                  bill.status === 'cancelled' ? 'text-slate-400' :
+                  bill.status === 'cancelled' ? 'text-stone-400 dark:text-stone-500' :
                   'text-slate-900 dark:text-slate-100'
                 }`}>
                   {fmt(bill.total_amount)}

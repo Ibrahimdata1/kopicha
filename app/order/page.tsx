@@ -25,6 +25,7 @@ import {
   ShoppingCart,
   X,
 } from 'lucide-react'
+import { useI18n } from '@/lib/i18n/context'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,12 +55,12 @@ function clearCart(sid: string) {
   try { localStorage.removeItem(CART_KEY(sid)) } catch { /* ignore */ }
 }
 
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  pending: 'รอครัว',
-  preparing: 'กำลังทำ',
-  ready: 'พร้อมเสิร์ฟ',
-  completed: 'เสร็จแล้ว',
-  cancelled: 'ยกเลิก',
+const ORDER_STATUS_LABEL_KEYS: Record<string, string> = {
+  pending: 'order.statusPending',
+  preparing: 'order.statusPreparing',
+  ready: 'order.statusReady',
+  completed: 'order.statusCompleted',
+  cancelled: 'order.statusCancelled',
 }
 const ORDER_STATUS_COLOR: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -100,6 +101,7 @@ function mergeCarts(
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function OrderPageContent() {
+  const { t } = useI18n()
   const params = useSearchParams()
   const sessionId = params.get('session') ?? ''
   const supabase = createClient()
@@ -159,7 +161,7 @@ function OrderPageContent() {
 
   useEffect(() => {
     if (!sessionId) {
-      setError('ไม่พบ QR Session — กรุณาขอ QR ใหม่จากพนักงาน')
+      setError(t('order.noSession'))
       setScreen('error')
       return
     }
@@ -172,12 +174,12 @@ function OrderPageContent() {
           .single()
 
         if (sessErr || !sess) {
-          setError('QR code ไม่ถูกต้องหรือหมดอายุ — กรุณาขอ QR ใหม่')
+          setError(t('order.invalidQR'))
           setScreen('error')
           return
         }
         if (sess.status === 'cancelled') {
-          setError('QR code นี้ถูกยกเลิก — กรุณาขอ QR ใหม่จากพนักงาน')
+          setError(t('order.cancelledQR'))
           setScreen('error')
           return
         }
@@ -195,7 +197,7 @@ function OrderPageContent() {
           .eq('id', sess.shop_id)
           .single()
 
-        if (!shop) { setError('ไม่พบข้อมูลร้านค้า'); setScreen('error'); return }
+        if (!shop) { setError(t('order.shopNotFound')); setScreen('error'); return }
         setShopName(shop.name)
         setPromptpayId(shop.promptpay_id ?? '')
         setTaxRate(shop.tax_rate ?? 0.07)
@@ -215,7 +217,7 @@ function OrderPageContent() {
         await loadPlacedOrders(sess.id)
         setScreen('menu')
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'โหลดข้อมูลไม่ได้')
+        setError(err instanceof Error ? err.message : t('order.loadError'))
         setScreen('error')
       }
     })()
@@ -292,10 +294,10 @@ function OrderPageContent() {
         const { data: prods } = await supabase
           .from('products').select('*').eq('shop_id', shopId).eq('is_active', true).order('name')
         setProducts(prods ?? [])
-        // Remove cart items for products no longer active
-        const activeIds = new Set((prods ?? []).map((p: Product) => p.id))
+        // Remove cart items for products no longer active OR stock = 0
+        const availableIds = new Set((prods ?? []).filter((p: Product) => p.stock !== 0).map((p: Product) => p.id))
         setCart((prev) => {
-          const filtered = prev.filter((c) => activeIds.has(c.product.id))
+          const filtered = prev.filter((c) => availableIds.has(c.product.id))
           if (filtered.length !== prev.length) saveCart(sessionId, filtered)
           return filtered
         })
@@ -378,7 +380,7 @@ function OrderPageContent() {
   const changeQty = async (productId: string, delta: number) => {
     const entry = cart.find((c) => c.product.id === productId)
     if (entry && entry.qty === 1 && delta === -1) {
-      const ok = await showConfirm('ลบสินค้า', `ต้องการลบ "${entry.product.name}" ออกจากตะกร้า?`)
+      const ok = await showConfirm(t('order.removeItem'), t('order.removeItemConfirm', { name: entry.product.name }))
       if (!ok) return
     }
     setCart((prev) => {
@@ -400,13 +402,13 @@ function OrderPageContent() {
     const { data: freshSession } = await supabase
       .from('customer_sessions').select('status').eq('id', session.id).single()
     if (freshSession?.status !== 'active') {
-      setDialog({ title: 'ไม่สามารถสั่งได้', message: 'บิลนี้ปิดหรือชำระเงินแล้ว', resolve: () => {} })
+      setDialog({ title: t('order.cannotOrder'), message: t('order.billClosed'), resolve: () => {} })
       return
     }
 
     const ok = await showConfirm(
-      'ยืนยันการสั่ง',
-      `${cartQty} รายการ รวม ${fmt(cartTotal)}\nออเดอร์จะส่งไปยังครัวทันที`
+      t('order.confirmOrder'),
+      `${cartQty} ${t('common.items')} ${t('order.totalLabel')} ${fmt(cartTotal)}\n${t('order.sentToKitchen')}`
     )
     if (!ok) return
 
@@ -435,7 +437,7 @@ function OrderPageContent() {
         .select()
         .single()
 
-      if (orderErr || !order) throw orderErr ?? new Error('สร้างออเดอร์ไม่ได้')
+      if (orderErr || !order) throw orderErr ?? new Error(t('order.createFailed'))
 
       await supabase.from('order_items').insert(
         snapshot.map((c) => ({
@@ -471,8 +473,8 @@ function OrderPageContent() {
     } catch (err: unknown) {
       setCart(snapshot) // restore on error
       setDialog({
-        title: 'เกิดข้อผิดพลาด',
-        message: err instanceof Error ? err.message : 'ลองใหม่อีกครั้ง',
+        title: t('common.error'),
+        message: err instanceof Error ? err.message : t('order.tryAgain'),
         resolve: () => {},
       })
     } finally {
@@ -483,7 +485,7 @@ function OrderPageContent() {
   // ── Show payment QR ───────────────────────────────────────────────────────
   const handleShowPayment = () => {
     if (unpaidGrandTotal <= 0) {
-      setDialog({ title: 'ไม่มียอดที่ต้องชำระ', message: 'ยังไม่มีออเดอร์ที่ค้างชำระ', resolve: () => {} })
+      setDialog({ title: t('order.noAmountDue'), message: t('order.noUnpaidOrders'), resolve: () => {} })
       return
     }
 
@@ -523,9 +525,11 @@ function OrderPageContent() {
     } catch { /* ignore */ }
   }, [unpaidGrandTotal, screen, payStatus, promptpayId])
 
+  // ซ่อนสินค้าที่หมด stock อัตโนมัติ
+  const availableProducts = products.filter((p) => p.stock !== 0)
   const filteredProducts = selectedCategory
-    ? products.filter((p) => p.category_id === selectedCategory)
-    : products
+    ? availableProducts.filter((p) => p.category_id === selectedCategory)
+    : availableProducts
 
   // ─── Screens ──────────────────────────────────────────────────────────────
 
@@ -534,7 +538,7 @@ function OrderPageContent() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-slate-400 text-sm">กำลังโหลดเมนู...</p>
+          <p className="text-gray-600 dark:text-stone-500 text-sm">{t('order.loadingMenu')}</p>
         </div>
       </div>
     )
@@ -547,8 +551,8 @@ function OrderPageContent() {
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
             <X size={28} className="text-red-500" />
           </div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">เปิดไม่ได้</h2>
-          <p className="text-gray-600 dark:text-slate-400 text-sm">{error}</p>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">{t('order.cannotOpen')}</h2>
+          <p className="text-gray-600 dark:text-stone-500 text-sm">{error}</p>
         </div>
       </div>
     )
@@ -561,10 +565,10 @@ function OrderPageContent() {
           <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-5">
             <CheckCircle2 size={40} className="text-green-500" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-2">ชำระเงินสำเร็จ!</h2>
-          <p className="text-gray-600 dark:text-slate-400 text-sm">ขอบคุณที่ใช้บริการ</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-2">{t('order.paymentSuccess')}</h2>
+          <p className="text-gray-600 dark:text-stone-500 text-sm">{t('order.thankYou')}</p>
           {session?.table_label && (
-            <p className="text-primary-600 dark:text-primary-400 font-semibold mt-2">โต๊ะ {session.table_label}</p>
+            <p className="text-primary-600 dark:text-primary-400 font-semibold mt-2">{t('common.table')} {session.table_label}</p>
           )}
           {sessionTotal > 0 && (
             <div className="mt-4">
@@ -595,7 +599,7 @@ function OrderPageContent() {
           </button>
           <div>
             <h1 className="font-bold text-gray-900 dark:text-slate-100">{shopName}</h1>
-            <p className="text-xs text-gray-600 dark:text-slate-400">สแกนเพื่อชำระเงิน</p>
+            <p className="text-xs text-gray-600 dark:text-stone-500">{t('order.scanToPay')}</p>
           </div>
         </div>
 
@@ -603,27 +607,27 @@ function OrderPageContent() {
           {payStatus === 'success' ? (
             <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-2xl p-8 text-center">
               <CheckCircle2 size={48} className="text-green-500 mx-auto mb-3" />
-              <h2 className="text-xl font-bold text-green-700 dark:text-green-400">ชำระเงินสำเร็จ!</h2>
-              <p className="text-green-600 dark:text-green-500 mt-1 text-sm">ขอบคุณที่ใช้บริการ</p>
+              <h2 className="text-xl font-bold text-green-700 dark:text-green-400">{t('order.paymentSuccess')}</h2>
+              <p className="text-green-600 dark:text-green-500 mt-1 text-sm">{t('order.thankYou')}</p>
             </div>
           ) : payStatus === 'expired' || payStatus === 'failed' ? (
             <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl p-8 text-center">
               <X size={40} className="text-red-400 mx-auto mb-3" />
               <h2 className="text-xl font-bold text-red-700 dark:text-red-400">
-                {payStatus === 'expired' ? 'QR หมดอายุ' : 'การชำระเงินล้มเหลว'}
+                {payStatus === 'expired' ? t('order.qrExpired') : t('order.paymentFailed')}
               </h2>
-              <p className="text-red-600 dark:text-red-400 mt-1 text-sm">กรุณาแจ้งพนักงาน หรือกลับไปลองใหม่</p>
+              <p className="text-red-600 dark:text-red-400 mt-1 text-sm">{t('order.contactStaff')}</p>
               <button
                 onClick={handleShowPayment}
                 className="mt-4 px-5 py-2.5 bg-red-500 text-white font-semibold rounded-xl hover:bg-red-600 transition text-sm"
               >
-                สร้าง QR ใหม่
+                {t('order.newQR')}
               </button>
             </div>
           ) : (
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 text-center">
-              <h2 className="font-bold text-gray-900 dark:text-slate-100 text-lg mb-1">สแกน QR PromptPay</h2>
-              <p className="text-gray-600 dark:text-slate-400 text-sm mb-5">{shopName}</p>
+              <h2 className="font-bold text-gray-900 dark:text-slate-100 text-lg mb-1">{t('order.scanQRPromptPay')}</h2>
+              <p className="text-gray-600 dark:text-stone-500 text-sm mb-5">{shopName}</p>
 
               {qrPayload ? (
                 <div className="flex justify-center mb-5">
@@ -633,7 +637,7 @@ function OrderPageContent() {
                 </div>
               ) : (
                 <div className="h-56 bg-gray-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center mb-5">
-                  <p className="text-gray-400 dark:text-slate-400 text-sm">ไม่มีข้อมูล PromptPay</p>
+                  <p className="text-gray-400 dark:text-stone-500 text-sm">{t('order.noPromptPay')}</p>
                 </div>
               )}
 
@@ -642,9 +646,9 @@ function OrderPageContent() {
               <div className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-full ${
                 qrTimeLeft < 60
                   ? 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400'
-                  : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400'
+                  : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-stone-500'
               }`}>
-                หมดอายุใน {minutes}:{seconds.toString().padStart(2, '0')}
+                {t('order.expiresIn')} {minutes}:{seconds.toString().padStart(2, '0')}
               </div>
             </div>
           )}
@@ -652,7 +656,7 @@ function OrderPageContent() {
           {/* Order summary on pay screen */}
           {unpaidOrders.length > 0 && payStatus !== 'success' && (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-4">
-              <h3 className="font-semibold text-gray-800 dark:text-slate-200 text-sm mb-3">รายการที่ต้องชำระ</h3>
+              <h3 className="font-semibold text-gray-800 dark:text-slate-200 text-sm mb-3">{t('order.itemsToPay')}</h3>
               <div className="space-y-2">
                 {unpaidOrders.map((o) => {
                   const activeItems = (o.items ?? []).filter((i) => (i.item_status ?? 'active') === 'active')
@@ -661,14 +665,14 @@ function OrderPageContent() {
                     <div key={o.id} className="text-sm space-y-0.5">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-700 dark:text-slate-300 font-medium">ออเดอร์ #{o.order_number}</span>
+                          <span className="text-gray-700 dark:text-slate-300 font-medium">{t('history.orderNum', { num: o.order_number })}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ORDER_STATUS_COLOR[o.status] ?? ''}`}>
-                            {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                            {t(ORDER_STATUS_LABEL_KEYS[o.status]) || o.status}
                           </span>
                         </div>
                         <span className="font-semibold text-gray-900 dark:text-slate-100">{fmt(o.total_amount ?? 0)}</span>
                       </div>
-                      {itemNames && <p className="text-xs text-gray-600 dark:text-slate-400">{itemNames}</p>}
+                      {itemNames && <p className="text-xs text-gray-600 dark:text-stone-500">{itemNames}</p>}
                     </div>
                   )
                 })}
@@ -677,7 +681,7 @@ function OrderPageContent() {
           )}
 
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400 text-center">
-            หากโอนแล้วแต่ระบบไม่อัพเดต กรุณาแจ้งพนักงาน
+            {t('order.transferNotice')}
           </div>
         </div>
       </div>
@@ -693,7 +697,7 @@ function OrderPageContent() {
           <div>
             <h1 className="font-bold text-gray-900 dark:text-slate-100 text-base">{shopName}</h1>
             {session?.table_label && (
-              <p className="text-xs text-gray-600 dark:text-slate-400">โต๊ะ {session.table_label}</p>
+              <p className="text-xs text-gray-600 dark:text-stone-500">{t('common.table')} {session.table_label}</p>
             )}
           </div>
           {cartQty > 0 && (
@@ -716,7 +720,7 @@ function OrderPageContent() {
           <div className="fixed top-20 left-0 right-0 flex justify-center z-50" style={{ animation: 'toastIn 0.25s ease-out' }}>
           <div className="bg-green-500 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 text-sm font-semibold">
             <CheckCircle2 size={16} />
-            ส่งออเดอร์ไปครัวแล้ว!
+            {t('order.sentToKitchenSuccess')}
           </div>
           </div>
         )}
@@ -744,7 +748,7 @@ function OrderPageContent() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800 dark:text-slate-200 text-sm flex items-center gap-1.5">
                 <ChefHat size={15} className="text-primary-500" />
-                ออเดอร์ของคุณ ({mergedList.length} รายการ)
+                {t('order.yourOrders', { count: mergedList.length })}
               </h3>
               <span className="font-bold text-primary-600 dark:text-primary-400 text-sm">{fmt(sessionGrandTotal)}</span>
             </div>
@@ -761,7 +765,7 @@ function OrderPageContent() {
             {sessionDiscountAmt > 0 && (
               <div className="flex items-center justify-between text-sm px-1 py-2 mb-2 border-t border-gray-100 dark:border-slate-700">
                 <span className="text-orange-600 dark:text-orange-400 font-medium">
-                  ส่วนลด {session?.discount_type === 'percent' ? `${session.discount_amount}%` : ''}
+                  {t('detail.discountLabel')} {session?.discount_type === 'percent' ? `${session.discount_amount}%` : ''}
                   {session?.discount_note ? ` (${session.discount_note})` : ''}
                 </span>
                 <span className="text-orange-600 dark:text-orange-400 font-semibold">-{fmt(sessionDiscountAmt)}</span>
@@ -775,12 +779,12 @@ function OrderPageContent() {
                   className="w-full flex items-center justify-center gap-2 py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl transition shadow-md shadow-primary-500/25"
                 >
                   <CreditCard size={16} />
-                  ชำระเงิน {fmt(unpaidGrandTotal)}
+                  {t('order.pay')} {fmt(unpaidGrandTotal)}
                 </button>
               ) : (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-center">
-                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">ยอดรวม {fmt(unpaidGrandTotal)}</p>
-                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">กรุณาชำระเงินที่เคาน์เตอร์</p>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{t('order.totalLabel')} {fmt(unpaidGrandTotal)}</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">{t('order.payAtCounter')}</p>
                 </div>
               )
             )}
@@ -797,7 +801,7 @@ function OrderPageContent() {
                 !selectedCategory ? 'bg-primary-500 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'
               }`}
             >
-              ทั้งหมด
+              {t('common.all')}
             </button>
             {categories.map((cat) => (
               <button
@@ -835,7 +839,7 @@ function OrderPageContent() {
                   </div>
                   {outOfStock && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <span className="bg-white text-gray-700 text-xs font-bold px-3 py-1 rounded-full">หมด</span>
+                      <span className="bg-white text-gray-700 text-xs font-bold px-3 py-1 rounded-full">{t('order.outOfStock')}</span>
                     </div>
                   )}
                   {entry && !outOfStock && (
@@ -871,7 +875,7 @@ function OrderPageContent() {
                         onClick={() => addToCart(product)}
                         className="w-full py-1.5 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold rounded-lg transition"
                       >
-                        + เพิ่ม
+                        + {t('order.add')}
                       </button>
                     )
                   )}
@@ -895,7 +899,7 @@ function OrderPageContent() {
               </span>
               <span className="flex items-center gap-2">
                 <ShoppingCart size={16} />
-                ดูตะกร้า
+                {t('order.viewCart')}
               </span>
               <span>{fmt(cartTotal)}</span>
             </button>
@@ -913,12 +917,12 @@ function OrderPageContent() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
               <h2 className="font-bold text-lg text-gray-900 dark:text-slate-100 flex items-center gap-2">
                 <ShoppingCart size={18} className="text-primary-500" />
-                ตะกร้าของคุณ
+                {t('order.yourCart')}
               </h2>
               <div className="flex items-center gap-2">
                 <button
                   onClick={async () => {
-                    const ok = await showConfirm('ล้างตะกร้า', 'ต้องการลบสินค้าทั้งหมดออกจากตะกร้า?')
+                    const ok = await showConfirm(t('order.clearCart'), t('order.clearCartConfirm'))
                     if (ok) {
                       clearCart(sessionId); setCart([]); setScreen('menu')
                       channelRef.current?.send({ type: 'broadcast', event: 'cart_cleared', payload: { clientId: clientIdRef.current } })
@@ -926,9 +930,9 @@ function OrderPageContent() {
                   }}
                   className="text-xs text-red-400 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 px-2 py-1 transition"
                 >
-                  ล้างตะกร้า
+                  {t('order.clearCart')}
                 </button>
-                <button onClick={() => setScreen('menu')} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400">
+                <button onClick={() => setScreen('menu')} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-stone-500">
                   <X size={20} />
                 </button>
               </div>
@@ -970,7 +974,7 @@ function OrderPageContent() {
 
             <div className="px-6 py-5 border-t border-gray-100 dark:border-slate-700">
               <div className="flex justify-between items-center mb-4">
-                <span className="font-semibold text-gray-800 dark:text-slate-200">รวม</span>
+                <span className="font-semibold text-gray-800 dark:text-slate-200">{t('order.totalLabel')}</span>
                 <span className="font-bold text-2xl text-primary-600 dark:text-primary-400">{fmt(cartTotal)}</span>
               </div>
               <button
@@ -979,13 +983,13 @@ function OrderPageContent() {
                 className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-4 rounded-2xl transition disabled:opacity-50 text-lg flex items-center justify-center gap-2 shadow-lg shadow-primary-500/30"
               >
                 {isPlacing ? (
-                  <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังสั่ง...</>
+                  <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> {t('order.ordering')}</>
                 ) : (
-                  <><ChefHat size={18} /> สั่งอาหาร {fmt(cartTotal)}</>
+                  <><ChefHat size={18} /> {t('order.placeOrder')} {fmt(cartTotal)}</>
                 )}
               </button>
               <p className="text-center text-xs text-gray-400 mt-2">
-                ออเดอร์จะส่งไปยังครัวทันที — {paymentMode === 'counter' ? 'ชำระเงินที่เคาน์เตอร์' : 'ชำระเงินได้ทีหลัง'}
+                {t('order.sentToKitchen')} — {paymentMode === 'counter' ? t('order.payAtCounter') : t('order.payLater')}
               </p>
             </div>
           </div>
@@ -997,21 +1001,21 @@ function OrderPageContent() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-fade-in">
             <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-2 text-lg">{dialog.title}</h3>
-            <p className="text-gray-600 dark:text-slate-400 text-sm mb-5 whitespace-pre-line">{dialog.message}</p>
+            <p className="text-gray-600 dark:text-stone-500 text-sm mb-5 whitespace-pre-line">{dialog.message}</p>
             <div className="flex gap-3">
               {dialog.confirm && (
                 <button
                   onClick={() => { dialog.resolve(false); setDialog(null) }}
                   className="flex-1 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-50 dark:hover:bg-slate-700"
                 >
-                  ยกเลิก
+                  {t('common.cancel')}
                 </button>
               )}
               <button
                 onClick={() => { dialog.resolve(true); setDialog(null) }}
                 className="flex-1 py-3 bg-primary-500 text-white font-bold rounded-xl hover:bg-primary-600 transition"
               >
-                {dialog.confirm ? 'ยืนยัน' : 'รับทราบ'}
+                {dialog.confirm ? t('common.confirm') : t('order.understood')}
               </button>
             </div>
           </div>

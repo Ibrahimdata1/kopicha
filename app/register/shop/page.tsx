@@ -27,7 +27,7 @@ function RegisterShopForm() {
       supabase.from('profiles').select('role, pending_shop_name').eq('id', user.id).single()
         .then(({ data: profile }) => {
           if (profile?.role) router.push('/pos/sessions')
-          else if (profile?.pending_shop_name) router.push('/pending')
+          // pending_shop_name มีค่า = user ยังกรอกร้านไม่เสร็จ → อยู่หน้านี้ต่อให้กรอกเสร็จ (ไม่ redirect)
         })
     })
   }, [router])
@@ -68,7 +68,7 @@ function RegisterShopForm() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">
               ลงทะเบียนร้านค้า
             </h1>
-            <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">{userEmail}</p>
+            <p className="text-gray-500 dark:text-stone-500 text-sm mt-1">{userEmail}</p>
             <p className="text-gray-400 dark:text-slate-500 text-xs mt-1">
               กรอกข้อมูลร้านเพื่อเริ่มใช้งาน
             </p>
@@ -86,6 +86,7 @@ function RegisterShopForm() {
                 onChange={(e) => setShopName(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-shadow"
                 placeholder="เช่น Coffee Corner, ร้านข้าวแม่ต้อย"
+                maxLength={100}
                 required
                 autoFocus
               />
@@ -100,6 +101,7 @@ function RegisterShopForm() {
                 onChange={(e) => setPromptpay(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-shadow"
                 placeholder="เบอร์โทรหรือเลขประจำตัวผู้เสียภาษี"
+                maxLength={13}
                 required
               />
               <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">

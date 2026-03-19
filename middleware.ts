@@ -30,9 +30,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   const isPublic =
+    pathname.startsWith('/api') ||
     pathname.startsWith('/order') ||
+    pathname.startsWith('/auth') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/partner') ||
+    pathname.startsWith('/agent') ||
     pathname.startsWith('/pending') ||
     pathname === '/'
 
@@ -41,6 +45,9 @@ export async function middleware(request: NextRequest) {
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
+
+  // Pass pathname to server components via header
+  supabaseResponse.headers.set('x-pathname', pathname)
 
   return supabaseResponse
 }

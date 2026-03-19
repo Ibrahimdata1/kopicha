@@ -8,6 +8,7 @@ import { buildOrderUrl } from '@/lib/qr'
 import type { OrderWithItems, CustomerSession } from '@/lib/types'
 import type { SessionWithOrders } from '@/components/SessionsView'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { useI18n } from '@/lib/i18n/context'
 
 const SessionDetailModal = dynamic(() => import('@/components/SessionDetailModal'), { ssr: false })
 import {
@@ -40,6 +41,7 @@ export default function TablesPage() {
   const supabase = createClient()
   const { profile, shop } = usePosContext()
   const { confirm, ConfirmDialogUI } = useConfirm()
+  const { t } = useI18n()
   const [tables, setTables] = useState<TableData[]>([])
   const [loading, setLoading] = useState(true)
   const [movingFrom, setMovingFrom] = useState<string | null>(null)
@@ -280,38 +282,35 @@ export default function TablesPage() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title flex items-center gap-2">
-            <Grid3X3 size={20} className="text-subtle" />
-            จัดการโต๊ะ
-          </h1>
+          <h1 className="page-title">{t('tables.title')}</h1>
           <div className="flex items-center gap-4 mt-1">
-            <span className="flex items-center gap-1.5 text-sm">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              <span className="text-muted">ว่าง {availableCount}</span>
+            <span className="flex items-center gap-1.5 text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-stone-500">{t('tables.available')} {availableCount}</span>
             </span>
-            <span className="flex items-center gap-1.5 text-sm">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-              <span className="text-muted">ไม่ว่าง {occupiedCount}</span>
+            <span className="flex items-center gap-1.5 text-xs">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="text-stone-500">{t('tables.occupied')} {occupiedCount}</span>
             </span>
           </div>
         </div>
         {movingFrom && (
           <button
             onClick={() => setMovingFrom(null)}
-            className="btn-secondary px-4 py-2 text-sm flex items-center gap-2"
+            className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5"
           >
             <X size={14} />
-            ยกเลิกย้าย
+            {t('tables.cancelMove')}
           </button>
         )}
       </div>
 
       {/* Move mode banner */}
       {movingFrom && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-xl px-4 py-3 mb-5 flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300 animate-fade-in">
+        <div className="bg-blue-50 dark:bg-blue-900/15 border border-blue-200 dark:border-blue-800/30 rounded-lg px-4 py-2.5 mb-5 flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
           <ArrowRightLeft size={16} />
-          <span className="font-medium">เลือกโต๊ะว่างที่ต้องการย้ายไป</span>
-          <span className="text-blue-500 dark:text-blue-400">จากโต๊ะ {movingFrom}</span>
+          <span className="font-medium">{t('tables.selectTarget')}</span>
+          <span className="text-blue-500 dark:text-blue-400">{t('tables.fromTable')} {movingFrom}</span>
         </div>
       )}
 
@@ -328,16 +327,16 @@ export default function TablesPage() {
               onClick={() => handleTableClick(table)}
               disabled={isMoving || creatingTable === table.key}
               className={`
-                relative rounded-2xl border-2 p-4 text-left transition-all duration-200 min-h-[120px] flex flex-col justify-between
+                relative rounded-lg border p-4 text-left transition-colors duration-150 min-h-[110px] flex flex-col justify-between
                 ${isSource
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/30 shadow-lg'
+                  ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/15'
                   : isAvailableTarget
-                  ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:shadow-lg hover:border-emerald-500 cursor-pointer animate-pulse-subtle'
+                  ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/15 cursor-pointer animate-pulse-subtle'
                   : isOccupiedBlocked
-                  ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 opacity-50 cursor-not-allowed'
+                  ? 'border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 opacity-40 cursor-not-allowed'
                   : table.status === 'occupied'
-                  ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10 hover:shadow-md hover:border-amber-400 cursor-pointer'
-                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-md hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer'
+                  ? 'border-amber-200 dark:border-amber-800 bg-white dark:bg-stone-900 hover:border-amber-300 cursor-pointer'
+                  : 'border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 hover:border-stone-300 dark:hover:border-stone-700 cursor-pointer'
                 }
               `}
             >
@@ -353,7 +352,7 @@ export default function TablesPage() {
                 {table.status === 'occupied' && !movingFrom && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setMovingFrom(table.key) }}
-                    className="p-2.5 -m-1 rounded-xl text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    className="p-2 -m-1 rounded-md text-stone-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
                     title="ย้ายโต๊ะ"
                   >
                     <ArrowRightLeft size={18} />
@@ -366,7 +365,7 @@ export default function TablesPage() {
                 <div>
                   <div className="flex items-center gap-1 mb-1">
                     <Users size={12} className="text-amber-500" />
-                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">ไม่ว่าง</span>
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{t('tables.occupied')}</span>
                   </div>
                   <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     {(() => {
@@ -389,24 +388,24 @@ export default function TablesPage() {
               ) : isAvailableTarget ? (
                 <div className="flex items-center gap-1.5">
                   <ArrowRightLeft size={13} className="text-emerald-500" />
-                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">ย้ายมาที่นี่</span>
+                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t('tables.moveHere')}</span>
                 </div>
               ) : creatingTable === table.key ? (
                 <div className="flex items-center gap-1.5">
                   <span className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs text-primary-500 font-medium">กำลังสร้าง...</span>
+                  <span className="text-xs text-primary-500 font-medium">{t('tables.creating')}</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs text-muted">ว่าง</span>
+                  <span className="text-xs text-muted">{t('tables.available')}</span>
                 </div>
               )}
 
               {isSource && (
-                <div className="absolute inset-0 rounded-2xl flex items-center justify-center bg-blue-500/10">
-                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 px-3 py-1 rounded-full shadow">
-                    กำลังย้าย...
+                <div className="absolute inset-0 rounded-lg flex items-center justify-center bg-blue-500/10">
+                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-stone-800 px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-800">
+                    {t('tables.moving')}
                   </span>
                 </div>
               )}
@@ -419,7 +418,7 @@ export default function TablesPage() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-lg text-sm font-medium animate-fade-in">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 px-4 py-2.5 rounded-lg shadow-card-lg text-sm font-medium animate-fade-in">
           {toast}
         </div>
       )}
