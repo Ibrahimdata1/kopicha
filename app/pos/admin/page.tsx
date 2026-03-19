@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
+import { useI18n } from '@/lib/i18n/context'
 import { validatePromptPay } from '@/lib/validate-promptpay'
 import {
   AlertCircle,
@@ -24,6 +25,8 @@ interface ShopRow {
   name: string
   promptpay_id: string
   subscription_paid_until: string | null
+  setup_fee_paid: boolean
+  first_product_at: string | null
   created_at: string
   is_deleted?: boolean
   deleted_at?: string | null
@@ -38,6 +41,7 @@ interface ShopRow {
 export default function AdminPage() {
   const supabase = createClient()
   const { profile } = usePosContext()
+  const { t } = useI18n()
   const [shops, setShops] = useState<ShopRow[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -60,7 +64,7 @@ export default function AdminPage() {
       // Load all shops directly via supabase (RLS allows super_admin)
       const { data: shopsData } = await supabase
         .from('shops')
-        .select('id, name, promptpay_id, subscription_paid_until, created_at, is_deleted, deleted_at')
+        .select('id, name, promptpay_id, subscription_paid_until, setup_fee_paid, first_product_at, created_at, is_deleted, deleted_at')
         .order('created_at', { ascending: false })
 
       // Load owners
@@ -111,7 +115,7 @@ export default function AdminPage() {
     setSavingConfig(true)
     setError('')
     try {
-      if (!profile?.id) throw new Error('ไม่พบโปรไฟล์')
+      if (!profile?.id) throw new Error(t('admin.profileNotFound'))
       const digits = companyPromptpay.trim().replace(/\D/g, '')
       const ppError = validatePromptPay(digits)
       if (ppError) throw new Error(ppError)
@@ -120,9 +124,9 @@ export default function AdminPage() {
         .update({ pending_promptpay: digits })
         .eq('id', profile.id)
       if (updateErr) throw updateErr
-      showSuccess('บันทึก PromptPay รับเงินเรียบร้อย')
+      showSuccess(t('admin.promptpaySaved'))
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setSavingConfig(false)
     }
@@ -130,13 +134,13 @@ export default function AdminPage() {
 
   const handleSetSubscriptionDate = async (shopId: string, shopName: string) => {
     const dateStr = dateInputs[shopId]
-    if (!dateStr) { setError('กรุณาเลือกวันที่'); return }
+    if (!dateStr) { setError(t('admin.selectDate')); return }
     const today = new Date().toISOString().slice(0, 10)
-    if (dateStr < today) { setError('วันที่ต้องไม่น้อยกว่าวันนี้'); return }
+    if (dateStr < today) { setError(t('admin.dateNotBeforeToday')); return }
     const ok = await confirm({
-      title: `ตั้งวันหมดอายุร้าน "${shopName}"?`,
-      message: `หมดอายุวันที่ ${dateStr}`,
-      confirmLabel: 'ยืนยัน',
+      title: `${t('admin.setExpiryShop')} "${shopName}"?`,
+      message: `${t('admin.expiryDate')} ${dateStr}`,
+      confirmLabel: t('common.confirm'),
     })
     if (!ok) return
     setActionLoading(shopId)
@@ -150,10 +154,10 @@ export default function AdminPage() {
       setShops((prev) =>
         prev.map((s) => (s.id === shopId ? { ...s, subscription_paid_until: dateStr } : s))
       )
-      showSuccess(`ตั้งวันหมดอายุร้าน "${shopName}" เป็น ${dateStr}`)
+      showSuccess(`${t('admin.setExpiryShop')} "${shopName}" ${t('admin.to')} ${dateStr}`)
       setDateInputs((prev) => ({ ...prev, [shopId]: '' }))
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setActionLoading(null)
     }
@@ -161,9 +165,9 @@ export default function AdminPage() {
 
   const handleSoftDeleteShop = async (shopId: string, shopName: string) => {
     const ok = await confirm({
-      title: `ลบร้าน "${shopName}"?`,
-      message: 'ร้านจะถูกซ่อน (soft delete) สามารถกู้คืนได้ภายหลัง',
-      confirmLabel: 'ลบร้าน',
+      title: `${t('admin.deleteShop')} "${shopName}"?`,
+      message: t('admin.softDeleteMessage'),
+      confirmLabel: t('admin.deleteShopBtn'),
       danger: true,
     })
     if (!ok) return
@@ -183,9 +187,9 @@ export default function AdminPage() {
           s.id === shopId ? { ...s, is_deleted: true, deleted_at: new Date().toISOString() } : s
         )
       )
-      showSuccess(`ลบร้าน "${shopName}" เรียบร้อย`)
+      showSuccess(`${t('admin.deleteShop')} "${shopName}" ${t('admin.success')}`)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setActionLoading(null)
     }
@@ -193,9 +197,9 @@ export default function AdminPage() {
 
   const handleUndeleteShop = async (shopId: string, shopName: string) => {
     const ok = await confirm({
-      title: `กู้คืนร้าน "${shopName}"?`,
-      message: 'ร้านจะกลับมาใช้งานได้ตามปกติ',
-      confirmLabel: 'กู้คืน',
+      title: `${t('admin.restoreShop')} "${shopName}"?`,
+      message: t('admin.restoreMessage'),
+      confirmLabel: t('admin.restoreBtn'),
     })
     if (!ok) return
     setError('')
@@ -220,17 +224,17 @@ export default function AdminPage() {
           s.id === shopId ? { ...s, is_deleted: false, deleted_at: null } : s
         )
       )
-      showSuccess(`กู้คืนร้าน "${shopName}" เรียบร้อย`)
+      showSuccess(`${t('admin.restoreShop')} "${shopName}" ${t('admin.success')}`)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setActionLoading(null)
     }
   }
 
   const getShopStatus = (shop: ShopRow): { label: string; color: string } => {
-    if (shop.is_deleted) return { label: 'ถูกลบ', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' }
-    return { label: 'ใช้งาน', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' }
+    if (shop.is_deleted) return { label: t('admin.statusDeleted'), color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' }
+    return { label: t('admin.statusActive'), color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' }
   }
 
   if (loading) {
@@ -239,6 +243,38 @@ export default function AdminPage() {
         <div className="spinner w-8 h-8 border-[3px]" />
       </div>
     )
+  }
+
+  const TRIAL_DAYS = 7
+  const subStatusText = (shop: ShopRow): string => {
+    const now = new Date()
+    // Paid subscription
+    if (shop.subscription_paid_until) {
+      const until = new Date(shop.subscription_paid_until)
+      if (until >= now) return `ชำระแล้ว ถึง ${until.toLocaleDateString('en-GB')}`
+      return `หมดอายุ ${until.toLocaleDateString('en-GB')}`
+    }
+    // Trial
+    if (shop.first_product_at) {
+      const trialEnd = new Date(new Date(shop.first_product_at).getTime() + TRIAL_DAYS * 86400000)
+      const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / 86400000)
+      if (daysLeft > 0) return `ทดลองใช้ เหลือ ${daysLeft} วัน (ถึง ${trialEnd.toLocaleDateString('en-GB')})`
+      return `ทดลองใช้หมดแล้ว (${trialEnd.toLocaleDateString('en-GB')})`
+    }
+    return 'ยังไม่มีสินค้า (trial ยังไม่เริ่ม)'
+  }
+  const subStatusColor = (shop: ShopRow): string => {
+    const now = new Date()
+    if (shop.subscription_paid_until) {
+      return new Date(shop.subscription_paid_until) >= now
+        ? 'text-green-600 dark:text-green-400'
+        : 'text-red-500 dark:text-red-400'
+    }
+    if (shop.first_product_at) {
+      const trialEnd = new Date(new Date(shop.first_product_at).getTime() + TRIAL_DAYS * 86400000)
+      if (trialEnd >= now) return 'text-amber-500 dark:text-amber-400'
+    }
+    return 'text-red-500 dark:text-red-400'
   }
 
   return (
@@ -250,9 +286,9 @@ export default function AdminPage() {
           <ShieldAlert size={20} className="text-primary-600 dark:text-primary-400" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Super Admin Panel</h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400">
-            จัดการร้านค้า {shops.length} ร้าน
+          <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">{t('admin.title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-stone-500">
+            {t('admin.manageShops')} {shops.length} {t('admin.shopsUnit')}
           </p>
         </div>
       </div>
@@ -275,11 +311,11 @@ export default function AdminPage() {
       <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 dark:border-slate-700">
           <Settings size={16} className="text-gray-400 dark:text-slate-500" />
-          <h2 className="font-semibold text-gray-900 dark:text-slate-100">ตั้งค่า PromptPay</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-slate-100">{t('admin.promptpaySettings')}</h2>
         </div>
         <div className="px-6 py-4 space-y-3">
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
-            PromptPay รับเงินจาก Owner
+            {t('admin.promptpayFromOwner')}
           </label>
           <div className="flex gap-2">
             <input
@@ -289,7 +325,7 @@ export default function AdminPage() {
               inputMode="numeric"
               maxLength={13}
               className="input flex-1"
-              placeholder="เบอร์โทร หรือ เลขบัตรประชาชน"
+              placeholder={t('admin.promptpayPlaceholder')}
             />
             <button
               onClick={handleSaveConfig}
@@ -297,7 +333,7 @@ export default function AdminPage() {
               className="flex items-center gap-1.5 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50 disabled:pointer-events-none"
             >
               <Save size={14} />
-              {savingConfig ? 'กำลังบันทึก...' : 'บันทึก'}
+              {savingConfig ? t('common.saving') : t('common.save')}
             </button>
           </div>
         </div>
@@ -308,7 +344,7 @@ export default function AdminPage() {
         <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 dark:border-slate-700">
           <Store size={16} className="text-gray-400 dark:text-slate-500" />
           <h2 className="font-semibold text-gray-900 dark:text-slate-100">
-            ร้านค้าทั้งหมด ({shops.length})
+            {t('admin.allShops')} ({shops.length})
           </h2>
         </div>
 
@@ -319,7 +355,7 @@ export default function AdminPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder:text-gray-400"
-            placeholder="ค้นหาร้านค้า..."
+            placeholder={t('admin.searchShops')}
           />
         </div>
 
@@ -330,7 +366,7 @@ export default function AdminPage() {
         }).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-slate-500 gap-2">
             <Building2 size={32} strokeWidth={1.5} />
-            <p className="text-sm">ยังไม่มีร้านค้า</p>
+            <p className="text-sm">{t('admin.noShops')}</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-slate-700">
@@ -368,24 +404,14 @@ export default function AdminPage() {
                           </p>
                         </div>
                       ) : (
-                        <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">ไม่มีเจ้าของ</p>
+                        <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{t('admin.noOwner')}</p>
                       )}
                       <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
-                        PromptPay: {shop.promptpay_id || '-'} · สร้าง{' '}
+                        PromptPay: {shop.promptpay_id || '-'} · {t('admin.created')}{' '}
                         {new Date(shop.created_at).toLocaleDateString('en-GB')}
                       </p>
-                      <p
-                        className={`text-xs mt-0.5 ${
-                          !shop.subscription_paid_until ||
-                          new Date(shop.subscription_paid_until) < new Date()
-                            ? 'text-red-500 dark:text-red-400 font-medium'
-                            : 'text-green-600 dark:text-green-400'
-                        }`}
-                      >
-                        สมาชิก:{' '}
-                        {shop.subscription_paid_until
-                          ? `ถึง ${new Date(shop.subscription_paid_until).toLocaleDateString('en-GB')}`
-                          : 'ยังไม่เปิดใช้'}
+                      <p className={`text-xs mt-0.5 font-medium ${subStatusColor(shop)}`}>
+                        สมาชิก: {subStatusText(shop)}
                       </p>
                     </div>
                   </div>
@@ -401,16 +427,16 @@ export default function AdminPage() {
                         onChange={(e) =>
                           setDateInputs((prev) => ({ ...prev, [shop.id]: e.target.value }))
                         }
-                        className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300"
+                        className="text-xs px-3 py-2 border border-stone-200 dark:border-stone-700 rounded-lg bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 w-40 cursor-pointer"
                       />
                       <button
                         onClick={() => handleSetSubscriptionDate(shop.id, shop.name)}
-                        disabled={actionLoading === shop.id || !dateInputs[shop.id]}
+                        disabled={actionLoading === shop.id || !dateInputs[shop.id] || dateInputs[shop.id] < new Date().toISOString().slice(0, 10)}
                         className="text-xs px-3 py-1.5 border border-green-200 dark:border-green-700/50 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
-                        title="เลือกวันหมดอายุ"
+                        title={t('admin.selectExpiryDate')}
                       >
                         <Calendar size={13} />
-                        ตั้งวันหมดอายุ
+                        {t('admin.setExpiry')}
                       </button>
                     </div>
 
@@ -422,7 +448,7 @@ export default function AdminPage() {
                         className="text-xs px-3 py-1.5 border border-blue-200 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
                       >
                         <RotateCcw size={13} />
-                        กู้คืน
+                        {t('admin.restoreBtn')}
                       </button>
                     ) : (
                       <button
@@ -431,7 +457,7 @@ export default function AdminPage() {
                         className="text-xs px-3 py-1.5 border border-red-200 dark:border-red-700/50 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
                       >
                         <Trash2 size={13} />
-                        ลบร้าน
+                        {t('admin.deleteShopBtn')}
                       </button>
                     )}
                   </div>

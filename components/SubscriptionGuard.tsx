@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { generatePromptPayPayload } from '@/lib/qr'
 import { AlertTriangle, X, Ticket, Check, Clock, ShieldOff, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
+import { useI18n } from '@/lib/i18n/context'
 import type { Shop } from '@/lib/types'
 
 const MONTHLY_FEE = 199
@@ -24,6 +25,15 @@ function getDaysOverdue(shop: Shop | null): number {
   paidUntil.setHours(0, 0, 0, 0)
   const diff = Math.floor((today.getTime() - paidUntil.getTime()) / (1000 * 60 * 60 * 24))
   return Math.max(0, diff)
+}
+
+function getDaysUntilExpiry(shop: Shop | null): number {
+  if (!shop?.subscription_paid_until) return Infinity
+  const paidUntil = new Date(shop.subscription_paid_until)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  paidUntil.setHours(0, 0, 0, 0)
+  return Math.floor((paidUntil.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }
 
 function getTrialDaysLeft(shop: Shop | null): number {
@@ -76,6 +86,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   const [referralLoading, setReferralLoading] = useState(false)
   const [setupFeePaid, setSetupFeePaid] = useState(shop?.setup_fee_paid ?? false)
   const [companyPromptpay, setCompanyPromptpay] = useState('0994569544')
+  const { t } = useI18n()
 
   // Fetch company PromptPay via DB function (bypasses RLS)
   useEffect(() => {
@@ -93,9 +104,9 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
             <ShieldOff size={30} className="text-red-500" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">ร้านค้าถูกระงับ</h2>
-          <p className="text-gray-600 dark:text-slate-400 text-sm mb-6">
-            ร้านค้าของคุณถูกระงับการใช้งาน<br />กรุณาติดต่อผู้ดูแลระบบ
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">{t('sub.shopSuspended')}</h2>
+          <p className="text-gray-600 dark:text-stone-500 text-sm mb-6">
+            {t('sub.shopSuspendedDesc')}<br />{t('sub.contactAdmin')}
           </p>
           <a
             href="mailto:contact.runawaytech@gmail.com"
@@ -111,9 +122,20 @@ export default function SubscriptionGuard({ shop, children }: Props) {
 
   const daysOverdue = getDaysOverdue(shop)
   const trialDaysLeft = getTrialDaysLeft(shop)
-  const trialExpired = !setupFeePaid && trialDaysLeft >= 0 && trialDaysLeft <= 0
+  const daysUntilExpiry = getDaysUntilExpiry(shop)
+
+  // === PAID MEMBER (setup_fee_paid = true) ===
   const isBlocked = setupFeePaid && daysOverdue >= 3
   const needsReminder = setupFeePaid && daysOverdue > 0 && daysOverdue < 3
+
+  // === TRIAL USER (setup_fee_paid = false) ===
+  // Admin may extend trial via subscription_paid_until — when that expires → ฿999 paywall
+  const trialExpiredByExtension = !setupFeePaid && !!shop?.subscription_paid_until && daysOverdue > 0
+  const trialExpiredNaturally = !setupFeePaid && !shop?.subscription_paid_until && trialDaysLeft >= 0 && trialDaysLeft <= 0
+  const trialExpired = trialExpiredByExtension || trialExpiredNaturally
+
+  // Near-expiry banner for trial users with admin extension (3 days before)
+  const nearExpiry = !setupFeePaid && !!shop?.subscription_paid_until && daysUntilExpiry >= 0 && daysUntilExpiry <= 2
 
   // Check if already dismissed today
   useEffect(() => {
@@ -131,7 +153,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
 
   const handleReferralSubmit = useCallback(async () => {
     const code = referralCode.trim().toUpperCase()
-    if (!code) { setReferralError('กรุณากรอกรหัสตัวแทน'); return }
+    if (!code) { setReferralError(t('sub.enterReferralCode')); return }
     if (!shop?.id) return
 
     setReferralLoading(true)
@@ -148,7 +170,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
         .single()
 
       if (!agent) {
-        setReferralError('รหัสตัวแทนไม่ถูกต้อง')
+        setReferralError(t('sub.invalidReferralCode'))
         return
       }
 
@@ -162,7 +184,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
 
       setSetupFeePaid(true)
     } catch (err: unknown) {
-      setReferralError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+      setReferralError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setReferralLoading(false)
     }
@@ -197,17 +219,17 @@ export default function SubscriptionGuard({ shop, children }: Props) {
               <Clock size={30} className="text-amber-500" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">
-              หมดระยะทดลองใช้ฟรี
+              {t('sub.trialExpired')}
             </h2>
-            <p className="text-gray-600 dark:text-slate-400 text-sm">
-              ชำระค่าแรกเข้า ฿{SETUP_FEE.toLocaleString()} เพื่อใช้งานต่อ
+            <p className="text-gray-600 dark:text-stone-500 text-sm">
+              {t('sub.paySetupFee', { amount: `฿${SETUP_FEE.toLocaleString()}` })}
             </p>
           </div>
 
           {/* QR Payment */}
           <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-5 mb-4">
             <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3 text-center">
-              ค่าแรกเข้า ฿{SETUP_FEE.toLocaleString()} (จ่ายครั้งเดียว)
+              {t('sub.setupFee', { amount: `฿${SETUP_FEE.toLocaleString()}` })}
             </p>
             {setupQr && (
               <div className="flex justify-center mb-3">
@@ -216,8 +238,8 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                 </div>
               </div>
             )}
-            <p className="text-xs text-gray-500 dark:text-slate-400 text-center">
-              สแกน QR PromptPay เพื่อชำระเงิน
+            <p className="text-xs text-gray-500 dark:text-stone-500 text-center">
+              {t('sub.scanQR')}
             </p>
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 text-center">
               PromptPay: {companyPromptpay}
@@ -226,14 +248,14 @@ export default function SubscriptionGuard({ shop, children }: Props) {
               onClick={handleMarkPaid}
               className="mt-4 w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition"
             >
-              โอนแล้ว
+              {t('sub.transferred')}
             </button>
           </div>
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
-            <span className="text-xs text-gray-400 dark:text-slate-500">หรือ</span>
+            <span className="text-xs text-gray-400 dark:text-slate-500">{t('common.or')}</span>
             <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
           </div>
 
@@ -241,7 +263,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
               <Ticket size={13} className="inline mr-1.5 text-gray-400" />
-              รหัสตัวแทน (ชำระผ่านตัวแทนแล้ว)
+              {t('sub.referralCode')}
             </label>
             <div className="flex gap-2">
               <input
@@ -249,7 +271,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                 value={referralCode}
                 onChange={(e) => { setReferralCode(e.target.value.toUpperCase()); setReferralError('') }}
                 className="input flex-1"
-                placeholder="เช่น AG-SOMCHAI-X4K2"
+                placeholder="e.g. AG-SOMCHAI-X4K2"
                 onKeyDown={(e) => e.key === 'Enter' && handleReferralSubmit()}
               />
               <button
@@ -278,22 +300,22 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             <AlertTriangle size={30} className="text-red-500" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">
-            ไม่สามารถใช้ระบบได้
+            {t('sub.blocked')}
           </h2>
-          <p className="text-gray-600 dark:text-slate-400 text-sm mb-4">
-            กรุณาชำระค่าบริการรายเดือนเพื่อใช้งานต่อ
+          <p className="text-gray-600 dark:text-stone-500 text-sm mb-4">
+            {t('sub.payMonthly')}
           </p>
 
           {/* Package info */}
           <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 mb-4 text-left">
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">ร้าน: <strong className="text-gray-800 dark:text-slate-200">{shop?.name}</strong></p>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">แพ็คเกจ: <strong className="text-gray-800 dark:text-slate-200">Pro (รายเดือน)</strong></p>
-            <p className="text-xs text-red-500 dark:text-red-400">หมดอายุ: <strong>{shop?.subscription_paid_until ? new Date(shop.subscription_paid_until).toLocaleDateString('en-GB') : 'ยังไม่ได้ตั้ง'}</strong> (เกิน {daysOverdue} วัน)</p>
+            <p className="text-xs text-gray-500 dark:text-stone-500 mb-1">{t('sub.shopLabel')}: <strong className="text-gray-800 dark:text-slate-200">{shop?.name}</strong></p>
+            <p className="text-xs text-gray-500 dark:text-stone-500 mb-1">{t('sub.package')}: <strong className="text-gray-800 dark:text-slate-200">Pro ({t('sub.monthly')})</strong></p>
+            <p className="text-xs text-red-500 dark:text-red-400">{t('sub.expires')}: <strong>{shop?.subscription_paid_until ? new Date(shop.subscription_paid_until).toLocaleDateString('en-GB') : t('sub.notSet')}</strong> ({t('sub.overdue')} {daysOverdue} {t('common.days')})</p>
           </div>
 
           <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-5 mb-4">
             <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3">
-              ค่าบริการ ฿{MONTHLY_FEE}/เดือน
+              {t('sub.fee', { amount: `฿${MONTHLY_FEE}` })}
             </p>
             {monthlyQr && (
               <div className="flex justify-center mb-3">
@@ -302,8 +324,8 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                 </div>
               </div>
             )}
-            <p className="text-xs text-gray-500 dark:text-slate-400">
-              สแกน QR PromptPay เพื่อชำระเงิน
+            <p className="text-xs text-gray-500 dark:text-stone-500">
+              {t('sub.scanQR')}
             </p>
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
               PromptPay: {companyPromptpay}
@@ -319,7 +341,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             }}
             className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition mt-2"
           >
-            ชำระแล้ว (ต่ออายุ 1 เดือน)
+            {t('sub.paidExtend')}
           </button>
         </div>
       </div>
@@ -328,12 +350,24 @@ export default function SubscriptionGuard({ shop, children }: Props) {
 
   return (
     <>
-      {/* Trial banner — show remaining days */}
-      {!setupFeePaid && trialDaysLeft >= 1 && trialDaysLeft <= 3 && (
+      {/* Near-expiry warning banner */}
+      {nearExpiry && !needsReminder && (
         <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/40 px-4 py-2.5 text-center">
           <p className="text-sm text-amber-800 dark:text-amber-200">
             <Clock size={14} className="inline mr-1" />
-            ทดลองใช้ฟรีเหลืออีก <strong>{trialDaysLeft} วัน</strong> — หลังจากนั้นต้องชำระค่าแรกเข้า ฿{SETUP_FEE.toLocaleString()}
+            {daysUntilExpiry === 0
+              ? `การทดลองใช้ฟรีหมดอายุวันนี้ — กรุณาชำระค่าบริการ ฿${MONTHLY_FEE} เพื่อใช้งานต่อ`
+              : `การทดลองใช้ฟรีจะหมดอายุในอีก ${daysUntilExpiry} วัน — กรุณาชำระค่าบริการ ฿${MONTHLY_FEE}`}
+          </p>
+        </div>
+      )}
+
+      {/* Trial banner — natural trial only (no admin extension), last 3 days */}
+      {!setupFeePaid && !shop?.subscription_paid_until && trialDaysLeft >= 1 && trialDaysLeft <= 3 && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/40 px-4 py-2.5 text-center">
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            <Clock size={14} className="inline mr-1" />
+            {t('sub.trialRemaining', { days: String(trialDaysLeft), amount: `฿${SETUP_FEE.toLocaleString()}` })}
           </p>
         </div>
       )}
@@ -354,19 +388,19 @@ export default function SubscriptionGuard({ shop, children }: Props) {
               <AlertTriangle size={24} className="text-amber-500" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-1">
-              กรุณาชำระค่าบริการ
+              {t('sub.payService')}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">
-              ร้าน: <strong>{shop?.name}</strong> · แพ็คเกจ Pro (รายเดือน)
+            <p className="text-xs text-gray-500 dark:text-stone-500 mb-1">
+              {t('sub.shopLabel')}: <strong>{shop?.name}</strong> · {t('sub.package')} Pro ({t('sub.monthly')})
             </p>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">
-              หมดอายุ: <strong>{shop?.subscription_paid_until ? new Date(shop.subscription_paid_until).toLocaleDateString('en-GB') : '-'}</strong>
+            <p className="text-xs text-gray-500 dark:text-stone-500 mb-1">
+              {t('sub.expires')}: <strong>{shop?.subscription_paid_until ? new Date(shop.subscription_paid_until).toLocaleDateString('en-GB') : '-'}</strong>
             </p>
-            <p className="text-sm text-gray-600 dark:text-slate-400 mb-1">
-              ค่าบริการรายเดือน ฿{MONTHLY_FEE}
+            <p className="text-sm text-gray-600 dark:text-stone-500 mb-1">
+              {t('sub.fee', { amount: `฿${MONTHLY_FEE}` })}
             </p>
             <p className="text-xs text-red-500 dark:text-red-400 mb-4">
-              เกินกำหนด {daysOverdue} วัน — ระบบจะถูกระงับใน {3 - daysOverdue} วัน
+              {t('sub.overdue')} {daysOverdue} {t('common.days')} — {t('sub.suspended', { days: String(3 - daysOverdue) })}
             </p>
 
             {!showPayment ? (
@@ -375,13 +409,13 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                   onClick={handleDismiss}
                   className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-50 dark:hover:bg-slate-700 text-sm transition"
                 >
-                  ภายหลัง
+                  {t('sub.later')}
                 </button>
                 <button
                   onClick={() => setShowPayment(true)}
                   className="flex-1 py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition"
                 >
-                  ชำระเงิน
+                  {t('sub.pay')}
                 </button>
               </div>
             ) : (
@@ -393,8 +427,8 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-gray-500 dark:text-slate-400">
-                  สแกน QR PromptPay เพื่อชำระเงิน
+                <p className="text-xs text-gray-500 dark:text-stone-500">
+                  {t('sub.scanQR')}
                 </p>
                 <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
                   PromptPay: {companyPromptpay}
@@ -408,13 +442,13 @@ export default function SubscriptionGuard({ shop, children }: Props) {
                   }}
                   className="mt-3 w-full py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition"
                 >
-                  ชำระแล้ว (ต่ออายุ 1 เดือน)
+                  {t('sub.paidExtend')}
                 </button>
                 <button
                   onClick={handleDismiss}
-                  className="mt-2 w-full py-2 text-gray-500 dark:text-slate-400 text-xs hover:underline"
+                  className="mt-2 w-full py-2 text-gray-500 dark:text-stone-500 text-xs hover:underline"
                 >
-                  ภายหลัง
+                  {t('sub.later')}
                 </button>
               </div>
             )}
