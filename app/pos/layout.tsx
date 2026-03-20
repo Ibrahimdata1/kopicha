@@ -6,6 +6,9 @@ import { PosProvider } from '@/lib/pos-context'
 import SubscriptionGuard from '@/components/SubscriptionGuard'
 import OrderNotification from '@/components/OrderNotification'
 
+// Force dynamic rendering — never cache layout data (shop subscription must be fresh)
+export const dynamic = 'force-dynamic'
+
 // Pages that cashier cannot access
 const CASHIER_BLOCKED = ['/pos/products', '/pos/dashboard', '/pos/settings']
 
