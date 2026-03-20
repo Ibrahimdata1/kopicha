@@ -11,6 +11,7 @@ import type { Shop } from '@/lib/types'
 const MONTHLY_FEE = 199
 const SETUP_FEE = 1399
 const TRIAL_DAYS = 7
+const GRACE_DAYS = 7 // days after expiry before blocking (service still active)
 
 interface Props {
   shop: Shop | null
@@ -78,7 +79,7 @@ function calcNewExpiry(shop: Shop | null): string {
   originalExpiry.setHours(0, 0, 0, 0)
   const daysLate = Math.floor((today.getTime() - originalExpiry.getTime()) / (1000 * 60 * 60 * 24))
 
-  if (daysLate > 10) {
+  if (daysLate > GRACE_DAYS) {
     return toLocalDateStr(addOneMonth(today))
   } else {
     return toLocalDateStr(addOneMonth(originalExpiry))
@@ -146,10 +147,11 @@ export default function SubscriptionGuard({ shop, children }: Props) {
     : null
 
   // === PAID MEMBER (setup_fee_paid = true) ===
-  // Block immediately on day 1 overdue — no grace period
-  // Also block when paid/referral trial has expired
-  const isBlocked = (setupFeePaid && daysOverdue >= 1) || paidTrialExpired
-  // Warn 3 days before subscription expiry or trial end
+  // Grace period: 7 days after expiry — service still active, banner shown
+  // Block only after grace period ends
+  const inGrace = setupFeePaid && daysOverdue >= 1 && daysOverdue <= GRACE_DAYS
+  const isBlocked = (setupFeePaid && daysOverdue > GRACE_DAYS) || paidTrialExpired
+  // Warn 3 days before expiry, or during grace period
   const paidNearExpiry = setupFeePaid && !paidTrialExpired && (
     (daysOverdue === 0 && daysUntilExpiry <= 3) ||
     (paidTrialDaysLeft !== null && paidTrialDaysLeft >= 0 && paidTrialDaysLeft <= 3)
@@ -388,6 +390,18 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           <p className="text-sm text-amber-800 dark:text-amber-200">
             <Clock size={14} className="inline mr-1" />
             {t('sub.trialRemaining', { days: String(trialDaysLeft), amount: `฿${SETUP_FEE.toLocaleString()}` })}
+          </p>
+        </div>
+      )}
+
+      {/* Grace period banner — paid member overdue but still active */}
+      {inGrace && (
+        <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-800/40 px-4 py-2.5 text-center">
+          <p className="text-sm text-red-800 dark:text-red-200">
+            <Clock size={14} className="inline mr-1" />
+            หมดอายุแล้ว — กรุณาชำระ ฿{MONTHLY_FEE} ภายใน <strong>{GRACE_DAYS - daysOverdue + 1} วัน</strong> ก่อนถูกระงับ
+            {' · '}
+            <a href="/pos/settings" className="underline font-semibold hover:text-red-900 dark:hover:text-red-100">ชำระเงิน</a>
           </p>
         </div>
       )}

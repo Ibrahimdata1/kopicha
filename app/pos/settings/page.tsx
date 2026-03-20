@@ -126,7 +126,7 @@ export default function SettingsPage() {
     }
     const orig = new Date(s.subscription_paid_until); orig.setHours(0, 0, 0, 0)
     const daysLate = Math.floor((today.getTime() - orig.getTime()) / 86400000)
-    const base = daysLate > 10 ? today : orig
+    const base = daysLate > 7 ? today : orig
     return localStr(addMonth(base))
   }, [])
 
