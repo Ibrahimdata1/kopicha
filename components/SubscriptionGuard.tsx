@@ -164,7 +164,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   const trialExpired = trialExpiredByExtension || trialExpiredNaturally
 
   // Near-expiry banner for trial users with admin extension (3 days before)
-  const nearExpiry = !setupFeePaid && !!shop?.subscription_paid_until && daysUntilExpiry >= 0 && daysUntilExpiry <= 2
+  const nearExpiry = !setupFeePaid && !!shop?.subscription_paid_until && daysUntilExpiry >= 0 && daysUntilExpiry <= 3
 
 
   const handleReferralSubmit = useCallback(async () => {
@@ -372,7 +372,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
 
   return (
     <>
-      {/* Near-expiry warning banner */}
+      {/* Near-expiry warning banner — admin-extended trial, last 3 days */}
       {nearExpiry && (
         <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/40 px-4 py-2.5 text-center">
           <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -380,6 +380,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             {daysUntilExpiry === 0
               ? `การทดลองใช้ฟรีหมดอายุวันนี้ — กรุณาชำระค่าบริการ ฿${MONTHLY_FEE} เพื่อใช้งานต่อ`
               : `การทดลองใช้ฟรีจะหมดอายุในอีก ${daysUntilExpiry} วัน — กรุณาชำระค่าบริการ ฿${MONTHLY_FEE}`}
+            {' · '}<a href="/pos/settings" className="underline font-semibold hover:text-amber-900 dark:hover:text-amber-100">ชำระเงิน</a>
           </p>
         </div>
       )}
@@ -390,6 +391,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           <p className="text-sm text-amber-800 dark:text-amber-200">
             <Clock size={14} className="inline mr-1" />
             {t('sub.trialRemaining', { days: String(trialDaysLeft), amount: `฿${SETUP_FEE.toLocaleString()}` })}
+            {' · '}<a href="/pos/settings" className="underline font-semibold hover:text-amber-900 dark:hover:text-amber-100">ชำระเงิน</a>
           </p>
         </div>
       )}
