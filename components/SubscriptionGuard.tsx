@@ -326,7 +326,7 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           {/* Package info */}
           <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 mb-4 text-left">
             <p className="text-xs text-gray-500 dark:text-stone-500 mb-1">{t('sub.shopLabel')}: <strong className="text-gray-800 dark:text-slate-200">{shop?.name}</strong></p>
-            <p className="text-xs text-gray-500 dark:text-stone-500 mb-1">{t('sub.package')}: <strong className="text-gray-800 dark:text-slate-200">Pro ({t('sub.monthly')})</strong></p>
+            <p className="text-xs text-gray-500 dark:text-stone-500 mb-1">{t('sub.package')}: <strong className="text-gray-800 dark:text-slate-200">Basic ({t('sub.monthly')})</strong></p>
             {paidTrialExpired ? (
               <p className="text-xs text-red-500 dark:text-red-400">หมดระยะทดลองใช้: <strong>{paidTrialEnd?.toLocaleDateString('en-GB')}</strong></p>
             ) : (
