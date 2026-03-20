@@ -448,7 +448,7 @@ export default function SettingsPage() {
               {/* Status badge */}
               {subDate && !subExpired && !isNearExpiry && (
                 <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-                  {shop.setup_fee_paid ? 'สมาชิก' : 'ทดลองใช้'} · {daysLeft} วัน
+                  {shop.setup_fee_paid ? 'สมาชิก' : 'ทดลองใช้'} · {subDate?.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
                 </span>
               )}
               {isNearExpiry && (
@@ -468,7 +468,7 @@ export default function SettingsPage() {
               )}
               {isPaidTrial && !isPaidTrialExpired && !isPaidTrialNearExpiry && (
                 <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-                  ทดลองใช้ฟรี · {paidTrialDaysLeftSetting} วัน
+                  ทดลองใช้ฟรี · {paidTrialDay?.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
                 </span>
               )}
               {isPaidTrialNearExpiry && (
