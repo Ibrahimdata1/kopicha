@@ -420,15 +420,17 @@ export default function AdminPage() {
                   <div className="flex flex-wrap gap-2 mt-3">
                     {/* Date picker for subscription */}
                     <div className="flex items-center gap-1.5">
-                      <input
-                        type="date"
-                        min={new Date().toISOString().slice(0, 10)}
-                        value={dateInputs[shop.id] || ''}
-                        onChange={(e) =>
-                          setDateInputs((prev) => ({ ...prev, [shop.id]: e.target.value }))
-                        }
-                        className="text-xs px-3 py-2 border border-stone-200 dark:border-stone-700 rounded-lg bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 w-40 cursor-pointer"
-                      />
+                      <label className="relative block w-40 cursor-pointer">
+                        <input
+                          type="date"
+                          min={new Date().toISOString().slice(0, 10)}
+                          value={dateInputs[shop.id] || ''}
+                          onChange={(e) =>
+                            setDateInputs((prev) => ({ ...prev, [shop.id]: e.target.value }))
+                          }
+                          className="text-xs px-3 py-2 border border-stone-200 dark:border-stone-700 rounded-lg bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 w-full cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
+                        />
+                      </label>
                       <button
                         onClick={() => handleSetSubscriptionDate(shop.id, shop.name)}
                         disabled={actionLoading === shop.id || !dateInputs[shop.id] || dateInputs[shop.id] < new Date().toISOString().slice(0, 10)}

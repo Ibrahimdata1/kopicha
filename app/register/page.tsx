@@ -183,10 +183,19 @@ function RegisterForm() {
       }
       if (!profileReady) throw new Error('ระบบกำลังสร้างบัญชี กรุณาลองอีกครั้ง')
 
+      // Normalize referral code — match agent regardless of dashes
+      let finalRefCode: string | null = refCode || null
+      if (!finalRefCode && manualRef.trim()) {
+        const normalized = manualRef.trim().toUpperCase().replace(/-/g, '')
+        const { data: agents } = await supabase.from('agents').select('code').eq('active', true)
+        const match = agents?.find(a => a.code.replace(/-/g, '') === normalized)
+        finalRefCode = match?.code ?? manualRef.trim().toUpperCase()
+      }
+
       const { data: result, error: rpcError } = await supabase.rpc('self_register_shop', {
         p_shop_name: shopName.trim(),
         p_promptpay: promptpay.trim().replace(/\D/g, ''),
-        p_referral_code: refCode || manualRef.trim().toUpperCase() || null,
+        p_referral_code: finalRefCode,
       })
       if (rpcError) throw rpcError
       if (result?.error) throw new Error(result.error)
@@ -443,9 +452,9 @@ function RegisterForm() {
                       <input
                         type="text"
                         value={manualRef}
-                        onChange={(e) => setManualRef(e.target.value.toUpperCase())}
-                        className="input"
-                        placeholder="เช่น AG-SOMCHAI-X4K2"
+                        onChange={(e) => setManualRef(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                        className="input tracking-widest"
+                        placeholder="เช่น AGSOMCHAIX4K2"
                         maxLength={30}
                       />
                       {manualRef && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">กรอกรหัสตัวแทนแล้ว — จะไม่ต้องชำระค่าแรกเข้า ฿1,399 (ถ้ารหัสถูกต้อง)</p>}

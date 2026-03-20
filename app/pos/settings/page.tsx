@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { usePosContext } from '@/lib/pos-context'
 import { useI18n } from '@/lib/i18n/context'
@@ -8,6 +8,7 @@ import type { PendingUser, TeamMember } from '@/lib/types'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { validatePromptPay } from '@/lib/validate-promptpay'
 import {
+  BadgeCheck,
   Camera,
   Check,
   Clock,
@@ -27,6 +28,8 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import Image from 'next/image'
+import { QRCodeSVG } from 'qrcode.react'
+import { generatePromptPayPayload } from '@/lib/qr'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 interface CashierCred { username: string; password: string }
@@ -47,7 +50,7 @@ export default function SettingsPage() {
   const { t } = useI18n()
   const [team, setTeam] = useState<TeamMember[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
-  const [loading, setLoading] = useState(true)
+  const [teamLoading, setTeamLoading] = useState(true)
 
   // Shop form
   const [shopName, setShopName] = useState(shop?.name ?? '')
@@ -73,35 +76,137 @@ export default function SettingsPage() {
   const [cashierCreds, setCashierCreds] = useState<Record<string, CashierCred>>({})
   const [showPwFor, setShowPwFor] = useState<string | null>(null)
 
+  // Subscription payment
+  const [companyPromptpay, setCompanyPromptpay] = useState<string | null>(null)
+  const [subPayLoading, setSubPayLoading] = useState(false)
+  const [subPaySuccess, setSubPaySuccess] = useState(false)
+
+  // Early payment (trial user paying before trial ends)
+  const [showEarlyPay, setShowEarlyPay] = useState(false)
+  const [earlyRefCode, setEarlyRefCode] = useState('')
+  const [earlyRefError, setEarlyRefError] = useState('')
+  const [earlyRefLoading, setEarlyRefLoading] = useState(false)
+  const [earlyPayLoading, setEarlyPayLoading] = useState(false)
+  const [earlyPaySuccess, setEarlyPaySuccess] = useState(false)
+
   // Logo upload
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
 
   const isSuperAdmin = profile?.role === 'super_admin'
   const isOwner = profile?.role === 'owner'
 
-  // ─── load team ────────────────────────────────────────────────────────────
+  // ─── fetch company promptpay ───────────────────────────────────────────────
   useEffect(() => {
-    const load = async () => {
-      if (profile?.shop_id) {
-        const { data: teamData } = await supabase
-          .from('profiles')
-          .select('id, email, full_name, role, avatar_url')
-          .eq('shop_id', profile.shop_id)
-          .order('created_at')
-        setTeam((teamData ?? []) as TeamMember[])
+    supabase.rpc('get_company_promptpay').then(({ data }) => {
+      setCompanyPromptpay(data ?? null)
+    })
+  }, [])
+
+  const monthlyQr = useMemo(() => {
+    try { return companyPromptpay ? generatePromptPayPayload(companyPromptpay, 199) : '' } catch { return '' }
+  }, [companyPromptpay])
+
+  const setupQr = useMemo(() => {
+    try { return companyPromptpay ? generatePromptPayPayload(companyPromptpay, 1399) : '' } catch { return '' }
+  }, [companyPromptpay])
+
+  // Fair expiry: don't waste remaining trial days
+  const calcFairExpiry = useCallback((s: typeof shop) => {
+    const localStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    if (!s?.subscription_paid_until) {
+      if (s?.first_product_at) {
+        const trialEnd = new Date(s.first_product_at); trialEnd.setHours(0, 0, 0, 0)
+        trialEnd.setDate(trialEnd.getDate() + 7)
+        const base = trialEnd > today ? trialEnd : today
+        const exp = new Date(base); exp.setMonth(exp.getMonth() + 1)
+        return localStr(exp)
       }
-      if (profile?.role === 'super_admin') {
-        const { data: pending } = await supabase.rpc('get_pending_users')
-        setPendingUsers((pending ?? []) as PendingUser[])
-      }
-      // Load cashier credentials for owner
-      if (['owner', 'super_admin'].includes(profile?.role ?? '')) {
-        const res = await fetch('/api/cashier-credentials')
-        if (res.ok) setCashierCreds(await res.json())
-      }
-      setLoading(false)
+      const exp = new Date(today); exp.setMonth(exp.getMonth() + 1)
+      return localStr(exp)
     }
-    load()
+    const orig = new Date(s.subscription_paid_until); orig.setHours(0, 0, 0, 0)
+    const daysLate = Math.floor((today.getTime() - orig.getTime()) / 86400000)
+    const base = daysLate > 10 ? today : orig
+    const exp = new Date(base); exp.setMonth(exp.getMonth() + 1)
+    return localStr(exp)
+  }, [])
+
+  // Handle early setup fee payment (QR ฿1,399)
+  const handleEarlySetupPaid = useCallback(async () => {
+    if (!shop?.id) return
+    setEarlyPayLoading(true)
+    try {
+      const newExpiry = calcFairExpiry(shop)
+      await supabase.from('shops').update({ setup_fee_paid: true, subscription_paid_until: newExpiry }).eq('id', shop.id)
+      setEarlyPaySuccess(true)
+      setTimeout(() => window.location.reload(), 1500)
+    } finally {
+      setEarlyPayLoading(false)
+    }
+  }, [shop?.id, shop?.first_product_at, calcFairExpiry])
+
+  // Handle early referral code
+  const handleEarlyReferral = useCallback(async () => {
+    const normalized = earlyRefCode.trim().toUpperCase().replace(/-/g, '')
+    if (!normalized) { setEarlyRefError('กรุณากรอกรหัสตัวแทน'); return }
+    if (!shop?.id) return
+    setEarlyRefLoading(true); setEarlyRefError('')
+    try {
+      const { data: agents } = await supabase.from('agents').select('id, code').eq('active', true)
+      const agent = agents?.find(a => a.code.replace(/-/g, '') === normalized) ?? null
+      if (!agent) { setEarlyRefError('รหัสตัวแทนไม่ถูกต้อง'); return }
+      const newExpiry = calcFairExpiry(shop)
+      await supabase.from('shops').update({ setup_fee_paid: true, referral_code: agent.code, subscription_paid_until: newExpiry }).eq('id', shop.id)
+      setEarlyPaySuccess(true)
+      setTimeout(() => window.location.reload(), 1500)
+    } catch { setEarlyRefError('เกิดข้อผิดพลาด') }
+    finally { setEarlyRefLoading(false) }
+  }, [earlyRefCode, shop?.id, shop?.first_product_at, calcFairExpiry])
+
+  const handleMarkMonthlyPaid = useCallback(async () => {
+    if (!shop?.id) return
+    setSubPayLoading(true)
+    try {
+      // Use calcFairExpiry so trial days aren't wasted when paying early
+      const newExpiry = calcFairExpiry(shop)
+      await supabase.from('shops').update({ subscription_paid_until: newExpiry }).eq('id', shop.id)
+      setSubPaySuccess(true)
+      refreshShop?.()
+    } finally {
+      setSubPayLoading(false)
+    }
+  }, [shop?.id, shop?.subscription_paid_until, shop?.first_product_at, calcFairExpiry])
+
+  // ─── load team (parallel) ─────────────────────────────────────────────────
+  useEffect(() => {
+    const tasks: Promise<unknown>[] = []
+
+    if (profile?.shop_id) {
+      tasks.push(
+        Promise.resolve(
+          supabase
+            .from('profiles')
+            .select('id, email, full_name, role, avatar_url')
+            .eq('shop_id', profile.shop_id)
+            .order('created_at')
+        ).then(({ data }) => setTeam((data ?? []) as TeamMember[]))
+      )
+    }
+
+    if (profile?.role === 'super_admin') {
+      tasks.push(
+        Promise.resolve(supabase.rpc('get_pending_users')).then(({ data }) => setPendingUsers((data ?? []) as PendingUser[]))
+      )
+    }
+
+    if (['owner', 'super_admin'].includes(profile?.role ?? '')) {
+      tasks.push(
+        fetch('/api/cashier-credentials').then(r => r.ok ? r.json() : {}).then(setCashierCreds)
+      )
+    }
+
+    Promise.all(tasks).finally(() => setTeamLoading(false))
   }, [])
 
   // ─── copy helper ──────────────────────────────────────────────────────────
@@ -282,14 +387,6 @@ export default function SettingsPage() {
   }
 
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner w-8 h-8 border-[3px]" />
-      </div>
-    )
-  }
-
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
       {ConfirmDialogUI}
@@ -305,52 +402,293 @@ export default function SettingsPage() {
       )}
 
       {/* Subscription Status */}
-      {isOwner && shop && (
-        <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Clock size={16} className="text-gray-400 dark:text-slate-500" />
-            <h2 className="font-bold text-gray-900 dark:text-slate-100">{t('settings.subscriptionStatus')}</h2>
-          </div>
-          {(() => {
-            const now = new Date()
-            const firstProduct = shop.first_product_at ? new Date(shop.first_product_at) : null
-            const trialEnd = firstProduct ? new Date(firstProduct.getTime() + 7 * 24 * 60 * 60 * 1000) : null
-            const subDate = shop.subscription_paid_until ? new Date(shop.subscription_paid_until) : null
-            const today = new Date(); today.setHours(0, 0, 0, 0)
-            const subDay = subDate ? new Date(subDate.getTime()) : null; subDay?.setHours(0, 0, 0, 0)
-            const subExpired = subDay && subDay < today
-            // Only show trial if no paid subscription date set at all
-            const isInTrial = !subDate && !shop.setup_fee_paid && trialEnd && trialEnd > now
-            return (
-              <div className="space-y-2">
-                {!subDate && !shop.setup_fee_paid && !firstProduct && (
-                  <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-                    <span className="text-sm text-blue-700 dark:text-blue-300">{t('settings.trialFree7Days')}</span>
-                  </div>
-                )}
-                {isInTrial && trialEnd && (
-                  <div className="flex items-center justify-between px-4 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
-                    <span className="text-sm text-amber-700 dark:text-amber-300">{t('settings.freeTrial')}</span>
-                    <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                      {t('settings.expires')} {trialEnd.toLocaleDateString('en-GB')} ({t('settings.remaining')} {Math.ceil((trialEnd.getTime() - now.getTime()) / 86400000)} {t('common.days')})
-                    </span>
-                  </div>
-                )}
-                {subDate && (
-                  <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${subExpired ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'}`}>
-                    <span className={`text-sm ${subExpired ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>
-                      {subExpired ? t('settings.expired') : shop.setup_fee_paid ? t('settings.member') : t('settings.freeTrial')}
-                    </span>
-                    <span className={`text-sm font-semibold ${subExpired ? 'text-red-800 dark:text-red-200' : 'text-green-800 dark:text-green-200'}`}>
-                      {t('settings.until')} {subDate.toLocaleDateString('en-GB')}
-                    </span>
-                  </div>
-                )}
+      {isOwner && shop && (() => {
+        const now = new Date()
+        const firstProduct = shop.first_product_at ? new Date(shop.first_product_at) : null
+        const trialEnd = firstProduct ? new Date(firstProduct.getTime() + 7 * 24 * 60 * 60 * 1000) : null
+        const subDate = shop.subscription_paid_until ? new Date(shop.subscription_paid_until) : null
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const subDay = subDate ? new Date(subDate) : null; subDay?.setHours(0, 0, 0, 0)
+        const subExpired = !!(subDay && subDay < today)
+        const isInTrial = !subDate && !shop.setup_fee_paid && trialEnd && trialEnd > now
+        const daysLeft = subDate && subDay ? Math.floor((subDay.getTime() - today.getTime()) / 86400000) : null
+        const daysOverdue = subExpired && subDay ? Math.floor((today.getTime() - subDay.getTime()) / 86400000) : 0
+        const isNearExpiry = !subExpired && daysLeft !== null && daysLeft <= 3
+
+        // Paid/referral user trial (setup_fee_paid=true, subscription_paid_until=null)
+        const isPaidTrial = shop.setup_fee_paid && !subDate && !!trialEnd
+        const paidTrialDay = trialEnd ? new Date(trialEnd.getFullYear(), trialEnd.getMonth(), trialEnd.getDate()) : null
+        const paidTrialDaysLeftSetting = paidTrialDay ? Math.floor((paidTrialDay.getTime() - today.getTime()) / 86400000) : null
+        const isPaidTrialExpired = isPaidTrial && !!paidTrialDay && paidTrialDay < today
+        const isPaidTrialNearExpiry = isPaidTrial && !isPaidTrialExpired && paidTrialDaysLeftSetting !== null && paidTrialDaysLeftSetting <= 3
+
+        const statusColor = (subExpired || isPaidTrialExpired)
+          ? 'border-red-300 dark:border-red-700'
+          : (isNearExpiry || isInTrial || isPaidTrialNearExpiry)
+          ? 'border-amber-300 dark:border-amber-700'
+          : 'border-green-300 dark:border-green-700'
+
+        const headerBg = (subExpired || isPaidTrialExpired)
+          ? 'bg-red-50 dark:bg-red-900/20'
+          : (isNearExpiry || isInTrial || isPaidTrialNearExpiry)
+          ? 'bg-amber-50 dark:bg-amber-900/20'
+          : 'bg-green-50 dark:bg-green-900/20'
+
+        return (
+          <section className={`rounded-2xl border-2 ${statusColor} overflow-hidden`}>
+            {/* Header bar */}
+            <div className={`${headerBg} px-6 py-4 flex items-center justify-between`}>
+              <div className="flex items-center gap-2.5">
+                {(subExpired || isPaidTrialExpired)
+                  ? <Clock size={18} className="text-red-500" />
+                  : (isNearExpiry || isPaidTrialNearExpiry)
+                  ? <Clock size={18} className="text-amber-500" />
+                  : <BadgeCheck size={18} className={(isInTrial || isPaidTrial) ? 'text-amber-500' : 'text-green-500'} />
+                }
+                <h2 className="font-bold text-gray-900 dark:text-slate-100 text-base">{t('settings.subscriptionStatus')}</h2>
               </div>
-            )
-          })()}
-        </section>
-      )}
+              {/* Status badge */}
+              {subDate && !subExpired && !isNearExpiry && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                  {shop.setup_fee_paid ? 'สมาชิก' : 'ทดลองใช้'} · {daysLeft} วัน
+                </span>
+              )}
+              {isNearExpiry && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                  {daysLeft === 0 ? 'หมดอายุวันนี้!' : `เหลืออีก ${daysLeft} วัน`}
+                </span>
+              )}
+              {subExpired && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                  เกินกำหนด {daysOverdue} วัน
+                </span>
+              )}
+              {isInTrial && !subExpired && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                  ทดลองใช้ฟรี
+                </span>
+              )}
+              {isPaidTrial && !isPaidTrialExpired && !isPaidTrialNearExpiry && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                  ทดลองใช้ฟรี · {paidTrialDaysLeftSetting} วัน
+                </span>
+              )}
+              {isPaidTrialNearExpiry && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                  {paidTrialDaysLeftSetting === 0 ? 'หมดอายุวันนี้!' : `เหลืออีก ${paidTrialDaysLeftSetting} วัน`}
+                </span>
+              )}
+              {isPaidTrialExpired && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                  หมดระยะทดลองใช้
+                </span>
+              )}
+            </div>
+
+            {/* Body */}
+            <div className="bg-white dark:bg-slate-800 px-6 py-4 space-y-3">
+              {/* No activity yet — direct user */}
+              {!subDate && !shop.setup_fee_paid && !firstProduct && (
+                <p className="text-sm text-blue-700 dark:text-blue-300">{t('settings.trialFree7Days')}</p>
+              )}
+
+              {/* No activity yet — referral/paid user waiting for first product */}
+              {!subDate && shop.setup_fee_paid && !firstProduct && (
+                <p className="text-sm text-blue-700 dark:text-blue-300">เพิ่มสินค้าชิ้นแรกเพื่อเริ่มนับระยะทดลองใช้ 7 วัน</p>
+              )}
+
+              {/* In free trial — direct user */}
+              {isInTrial && trialEnd && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-amber-700 dark:text-amber-300">{t('settings.freeTrial')}</span>
+                  <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                    หมดอายุ {trialEnd.toLocaleDateString('th-TH')}
+                    <span className="ml-1 text-xs font-normal opacity-70">(อีก {Math.ceil((trialEnd.getTime() - now.getTime()) / 86400000)} วัน)</span>
+                  </span>
+                </div>
+              )}
+
+              {/* In trial — referral/paid user */}
+              {isPaidTrial && trialEnd && !isPaidTrialExpired && (
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm ${isPaidTrialNearExpiry ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-300'}`}>ทดลองใช้ฟรี (สมาชิก)</span>
+                  <span className={`text-sm font-semibold ${isPaidTrialNearExpiry ? 'text-amber-800 dark:text-amber-200' : 'text-green-800 dark:text-green-200'}`}>
+                    หมดอายุ {trialEnd.toLocaleDateString('th-TH')}
+                    <span className="ml-1 text-xs font-normal opacity-70">(อีก {Math.max(0, paidTrialDaysLeftSetting ?? 0)} วัน)</span>
+                  </span>
+                </div>
+              )}
+
+              {/* Has subscription date */}
+              {subDate && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm font-medium ${subExpired ? 'text-red-600 dark:text-red-400' : isNearExpiry ? 'text-amber-600 dark:text-amber-400' : 'text-green-700 dark:text-green-300'}`}>
+                      {subExpired ? 'หมดอายุแล้ว' : isNearExpiry ? (daysLeft === 0 ? 'หมดอายุวันนี้' : `เหลือ ${daysLeft} วัน`) : shop.setup_fee_paid ? 'สมาชิก' : 'ทดลองใช้'}
+                    </span>
+                    <span className={`text-sm font-bold ${subExpired ? 'text-red-700 dark:text-red-300' : isNearExpiry ? 'text-amber-700 dark:text-amber-300' : 'text-green-800 dark:text-green-200'}`}>
+                      {subExpired ? 'หมดอายุ' : 'ถึงวันที่'} {subDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </span>
+                  </div>
+
+                  {/* Monthly payment — when expired or last day (paid member) */}
+                  {(subExpired || isNearExpiry) && shop.setup_fee_paid && (
+                    <div className={`pt-3 border-t ${subExpired ? 'border-red-200 dark:border-red-800/40' : 'border-amber-200 dark:border-amber-800/40'}`}>
+                      {subPaySuccess ? (
+                        <div className="text-center py-3 text-sm text-green-600 dark:text-green-400 font-semibold">✓ บันทึกแล้ว — รอ super admin ยืนยัน</div>
+                      ) : (
+                        <>
+                          <p className={`text-sm font-bold mb-3 text-center ${subExpired ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                            ชำระค่าบริการรายเดือน ฿199
+                          </p>
+                          {monthlyQr ? (
+                            <div className="flex justify-center mb-3">
+                              <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
+                                <QRCodeSVG value={monthlyQr} size={160} />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="h-[184px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>
+                          )}
+                          {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500 mb-3">PromptPay: {companyPromptpay}</p>}
+                          <button onClick={handleMarkMonthlyPaid} disabled={subPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
+                            {subPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว — ต่ออายุ 1 เดือน'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Monthly QR — paid/referral user trial expired or near expiry */}
+              {(isPaidTrialExpired || isPaidTrialNearExpiry) && (
+                <div className={`pt-3 border-t ${isPaidTrialExpired ? 'border-red-200 dark:border-red-800/40' : 'border-amber-200 dark:border-amber-800/40'}`}>
+                  {subPaySuccess ? (
+                    <div className="text-center py-3 text-sm text-green-600 dark:text-green-400 font-semibold">✓ บันทึกแล้ว — รอ super admin ยืนยัน</div>
+                  ) : (
+                    <>
+                      <p className={`text-sm font-bold mb-3 text-center ${isPaidTrialExpired ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                        {isPaidTrialExpired ? 'หมดระยะทดลองใช้ฟรีแล้ว — ' : 'ระยะทดลองใช้กำลังจะหมด — '}ชำระค่าบริการรายเดือน ฿199
+                      </p>
+                      {monthlyQr ? (
+                        <div className="flex justify-center mb-3">
+                          <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
+                            <QRCodeSVG value={monthlyQr} size={160} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-[184px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>
+                      )}
+                      {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500 mb-3">PromptPay: {companyPromptpay}</p>}
+                      <button onClick={handleMarkMonthlyPaid} disabled={subPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
+                        {subPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว — ต่ออายุ 1 เดือน'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Early payment — referral/paid user in trial with >3 days left */}
+              {isPaidTrial && !isPaidTrialExpired && !isPaidTrialNearExpiry && isOwner && (
+                <div className="pt-3 border-t border-gray-100 dark:border-slate-700">
+                  {subPaySuccess ? (
+                    <div className="text-center py-3 text-sm text-green-600 dark:text-green-400 font-semibold">✓ บันทึกแล้ว — รอ super admin ยืนยัน</div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShowEarlyPay(v => !v)}
+                        className="w-full text-left text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline flex items-center gap-1"
+                      >
+                        <CreditCard size={14} />
+                        ต้องการชำระก่อนหมด trial?
+                        <span className="ml-auto text-xs text-gray-400">{showEarlyPay ? '▲' : '▼'}</span>
+                      </button>
+                      {showEarlyPay && (
+                        <div className="mt-3 space-y-3">
+                          <p className="text-xs text-gray-500 dark:text-stone-400 text-center">
+                            ชำระวันนี้ → ต่ออายุนับจากวันหมด trial (<strong>{trialEnd?.toLocaleDateString('th-TH')}</strong>) + 1 เดือน
+                          </p>
+                          <p className="text-sm font-bold text-gray-800 dark:text-slate-200 text-center">ชำระค่าบริการรายเดือน ฿199</p>
+                          {monthlyQr ? (
+                            <div className="flex justify-center">
+                              <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
+                                <QRCodeSVG value={monthlyQr} size={150} />
+                              </div>
+                            </div>
+                          ) : <div className="h-[174px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>}
+                          {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500">PromptPay: {companyPromptpay}</p>}
+                          <button onClick={handleMarkMonthlyPaid} disabled={subPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
+                            {subPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว ฿199'}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Early payment — direct user (setup_fee_paid = false) who wants to pay before trial ends */}
+              {!shop.setup_fee_paid && isOwner && (
+                <div className="pt-3 border-t border-gray-100 dark:border-slate-700">
+                  {earlyPaySuccess ? (
+                    <div className="text-center py-3 text-sm text-green-600 dark:text-green-400 font-semibold">✓ บันทึกแล้ว กำลังรีโหลด...</div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShowEarlyPay(v => !v)}
+                        className="w-full text-left text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline flex items-center gap-1"
+                      >
+                        <CreditCard size={14} />
+                        ต้องการชำระก่อนหมด trial?
+                        <span className="ml-auto text-xs text-gray-400">{showEarlyPay ? '▲' : '▼'}</span>
+                      </button>
+                      {showEarlyPay && (
+                        <div className="mt-3 space-y-3">
+                          {/* QR ฿1,399 */}
+                          <p className="text-sm font-bold text-gray-800 dark:text-slate-200 text-center">ชำระค่าแรกเข้า ฿1,399</p>
+                          {setupQr ? (
+                            <div className="flex justify-center">
+                              <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
+                                <QRCodeSVG value={setupQr} size={150} />
+                              </div>
+                            </div>
+                          ) : <div className="h-[174px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>}
+                          {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500">PromptPay: {companyPromptpay}</p>}
+                          <button onClick={handleEarlySetupPaid} disabled={earlyPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
+                            {earlyPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว ฿1,399'}
+                          </button>
+                          {/* Divider */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
+                            <span className="text-xs text-gray-400">หรือใช้รหัสตัวแทน</span>
+                            <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
+                          </div>
+                          {/* Referral code */}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={earlyRefCode}
+                              onChange={e => { setEarlyRefCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()); setEarlyRefError('') }}
+                              placeholder="รหัสตัวแทน เช่น AGTEST0001"
+                              className="input flex-1 text-sm tracking-widest"
+                              autoComplete="off"
+                            />
+                            <button onClick={handleEarlyReferral} disabled={earlyRefLoading} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition shrink-0 disabled:opacity-50">
+                              {earlyRefLoading ? <span className="spinner-sm" /> : '✓'}
+                            </button>
+                          </div>
+                          {earlyRefError && <p className="text-xs text-red-500">{earlyRefError}</p>}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )
+      })()}
 
       {/* Shop Settings */}
       {(isOwner || isSuperAdmin) && shop && (
@@ -493,7 +831,17 @@ export default function SettingsPage() {
 
           {/* Team list */}
           <div className="divide-y divide-gray-100 dark:divide-slate-700 mb-5 -mx-6">
-            {team.map((member) => {
+            {teamLoading ? (
+              [0,1].map(i => (
+                <div key={i} className="flex items-center gap-3 px-6 py-3">
+                  <div className="w-4 h-4 rounded bg-gray-200 dark:bg-slate-700 animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3.5 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+                    <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/60 rounded animate-pulse" />
+                  </div>
+                </div>
+              ))
+            ) : team.map((member) => {
               const isCashier = member.role === 'cashier'
               const username = isCashier && member.email ? member.email.split('@')[0] : null
               const isMe = member.id === profile?.id

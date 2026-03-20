@@ -18,7 +18,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
   // Fetch profile first (needed for shop_id)
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*')
+    .select('id, role, shop_id, full_name, email, avatar_url, pending_shop_name, pending_promptpay, created_at')
     .eq('id', user.id)
     .single()
 
