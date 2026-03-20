@@ -113,23 +113,21 @@ export default function SettingsPage() {
   // Fair expiry: don't waste remaining trial days
   const calcFairExpiry = useCallback((s: typeof shop) => {
     const localStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    const addMonth = (d: Date) => { const r = new Date(d); const day = r.getDate(); r.setMonth(r.getMonth() + 1); if (r.getDate() !== day) r.setDate(0); return r }
     const today = new Date(); today.setHours(0, 0, 0, 0)
     if (!s?.subscription_paid_until) {
       if (s?.first_product_at) {
         const trialEnd = new Date(s.first_product_at); trialEnd.setHours(0, 0, 0, 0)
         trialEnd.setDate(trialEnd.getDate() + 7)
         const base = trialEnd > today ? trialEnd : today
-        const exp = new Date(base); exp.setMonth(exp.getMonth() + 1)
-        return localStr(exp)
+        return localStr(addMonth(base))
       }
-      const exp = new Date(today); exp.setMonth(exp.getMonth() + 1)
-      return localStr(exp)
+      return localStr(addMonth(today))
     }
     const orig = new Date(s.subscription_paid_until); orig.setHours(0, 0, 0, 0)
     const daysLate = Math.floor((today.getTime() - orig.getTime()) / 86400000)
     const base = daysLate > 10 ? today : orig
-    const exp = new Date(base); exp.setMonth(exp.getMonth() + 1)
-    return localStr(exp)
+    return localStr(addMonth(base))
   }, [])
 
   // Handle early setup fee payment (QR ฿1,399)

@@ -52,7 +52,10 @@ function toLocalDateStr(d: Date): string {
 
 function addOneMonth(date: Date): Date {
   const d = new Date(date)
+  const day = d.getDate()
   d.setMonth(d.getMonth() + 1)
+  // Clamp overflow: e.g. Jan 31 → Feb 31 doesn't exist → setDate(0) = last day of Feb
+  if (d.getDate() !== day) d.setDate(0)
   return d
 }
 
