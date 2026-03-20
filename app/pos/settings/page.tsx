@@ -522,7 +522,7 @@ export default function SettingsPage() {
                 <>
                   <div className="flex items-center justify-between">
                     <span className={`text-sm font-medium ${subExpired ? 'text-red-600 dark:text-red-400' : isNearExpiry ? 'text-amber-600 dark:text-amber-400' : 'text-green-700 dark:text-green-300'}`}>
-                      {subExpired ? 'หมดอายุแล้ว' : isNearExpiry ? (daysLeft === 0 ? 'หมดอายุวันนี้' : `เหลือ ${daysLeft} วัน`) : shop.setup_fee_paid ? 'แพ็กเกจ Pro' : 'ทดลองใช้'}
+                      {subExpired ? 'หมดอายุแล้ว' : isNearExpiry ? (daysLeft === 0 ? 'หมดอายุวันนี้' : `เหลือ ${daysLeft} วัน`) : shop.setup_fee_paid ? 'แพ็กเกจ Basic' : 'ทดลองใช้'}
                     </span>
                     <span className={`text-sm font-bold ${subExpired ? 'text-red-700 dark:text-red-300' : isNearExpiry ? 'text-amber-700 dark:text-amber-300' : 'text-green-800 dark:text-green-200'}`}>
                       {subExpired ? 'หมดอายุ' : 'ถึงวันที่'} {subDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
