@@ -70,12 +70,9 @@ async function main() {
   const ok = await login(p, 'admin@admin.com', 'admin')
   if (!ok) { console.log('❌ Login failed'); await browser.close(); return }
 
-  // Bypass paywall if present
-  const paidBtn = p.locator('button:has-text("โอนแล้ว")').first()
-  if (await paidBtn.count() > 0 && await paidBtn.isVisible()) {
+  // Paywall uses Omise QR — ensure subscription active in DB before running
+  if (await p.locator('[data-testid="paywall"]').count() > 0) {
     await snap(p, 'S01-7-paywall')
-    await paidBtn.click()
-    await p.waitForTimeout(2000)
   }
 
   await snap(p, 'S01-8-after-login')
@@ -265,9 +262,7 @@ async function main() {
   const ownerCtx2 = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const op2 = await ownerCtx2.newPage()
   await login(op2, 'admin@admin.com', 'admin')
-  // bypass paywall
-  const pb2 = op2.locator('button:has-text("โอนแล้ว")').first()
-  if (await pb2.count() > 0 && await pb2.isVisible()) await pb2.click()
+  // Paywall uses Omise QR — ensure subscription active in DB
   await op2.waitForTimeout(2000)
 
   // Go to tables to find/create a session
@@ -362,8 +357,7 @@ async function main() {
   await snap(mp, 'mobile-register')
 
   if (await login(mp, 'admin@admin.com', 'admin')) {
-    const mpb = mp.locator('button:has-text("โอนแล้ว")').first()
-    if (await mpb.count() > 0 && await mpb.isVisible()) { await mpb.click(); await mp.waitForTimeout(2000) }
+    // Paywall uses Omise QR — ensure subscription active in DB
 
     for (const [route, name] of [
       ['/pos/sessions', 'mobile-sessions'],

@@ -37,13 +37,8 @@ async function main() {
   await ownerPage.waitForTimeout(2000)
   await snap(ownerPage, 'S01-07-paywall-setupfee')
 
-  // Click "โอนแล้ว" to bypass
-  const paidBtn = ownerPage.locator('button:has-text("โอนแล้ว")').first()
-  if (await paidBtn.count() > 0 && await paidBtn.isVisible()) {
-    await paidBtn.click()
-    console.log('  ✅ Clicked "โอนแล้ว" — bypassed paywall')
-    await ownerPage.waitForTimeout(3000)
-  }
+  // Paywall now uses Omise — bypass by checking if blocked and reloading (DB updated externally)
+  console.log('  ℹ️ Paywall uses Omise QR — ensure subscription is active in DB before running')
 
   // Now capture every POS page
   // Sessions / Bills
@@ -156,12 +151,7 @@ async function main() {
 
   if (await login(mobPage, 'admin@admin.com', 'admin')) {
     await mobPage.waitForTimeout(2000)
-    // Bypass paywall on mobile too
-    const mobPaid = mobPage.locator('button:has-text("โอนแล้ว")').first()
-    if (await mobPaid.count() > 0 && await mobPaid.isVisible()) {
-      await mobPaid.click()
-      await mobPage.waitForTimeout(2000)
-    }
+    // Paywall uses Omise QR — ensure subscription is active in DB before running
 
     for (const [route, name] of [
       ['/pos/sessions', 'mobile-sessions'],

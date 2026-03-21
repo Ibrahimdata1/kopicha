@@ -40,11 +40,7 @@ async function main() {
     console.log('❌ Owner login failed'); await browser.close(); return
   }
 
-  // Bypass paywall
-  const pb = p.locator('button:has-text("โอนแล้ว")').first()
-  if (await pb.count() > 0 && await pb.isVisible()) {
-    await pb.click(); await p.waitForTimeout(2000)
-  }
+  // Paywall now uses Omise QR — ensure subscription is active in DB before running
 
   // Sessions
   await p.goto(`${BASE}/pos/sessions`)
@@ -169,8 +165,7 @@ async function main() {
   const ownerCtx2 = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const op2 = await ownerCtx2.newPage()
   await login(op2, 'admin@admin.com', 'admin')
-  const pb2 = op2.locator('button:has-text("โอนแล้ว")').first()
-  if (await pb2.count() > 0 && await pb2.isVisible()) await pb2.click()
+  // Paywall uses Omise QR — ensure subscription active in DB
   await op2.waitForTimeout(2000)
   await op2.goto(`${BASE}/pos/tables`)
   await op2.waitForLoadState('networkidle')

@@ -28,8 +28,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import Image from 'next/image'
-import { QRCodeSVG } from 'qrcode.react'
-import { generatePromptPayPayload } from '@/lib/qr'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 interface CashierCred { username: string; password: string }
@@ -77,16 +76,16 @@ export default function SettingsPage() {
   const [showPwFor, setShowPwFor] = useState<string | null>(null)
 
   // Subscription payment
-  const [companyPromptpay, setCompanyPromptpay] = useState<string | null>(null)
-  const [subPayLoading, setSubPayLoading] = useState(false)
   const [subPaySuccess, setSubPaySuccess] = useState(false)
+  const [omiseQrUrl, setOmiseQrUrl] = useState<string | null>(null)
+  const [omiseLoading, setOmiseLoading] = useState(false)
+  const [omisePaid, setOmisePaid] = useState(false)
 
   // Early payment (trial user paying before trial ends)
   const [showEarlyPay, setShowEarlyPay] = useState(false)
   const [earlyRefCode, setEarlyRefCode] = useState('')
   const [earlyRefError, setEarlyRefError] = useState('')
   const [earlyRefLoading, setEarlyRefLoading] = useState(false)
-  const [earlyPayLoading, setEarlyPayLoading] = useState(false)
   const [earlyPaySuccess, setEarlyPaySuccess] = useState(false)
 
   // Logo upload
@@ -95,54 +94,60 @@ export default function SettingsPage() {
   const isSuperAdmin = profile?.role === 'super_admin'
   const isOwner = profile?.role === 'owner'
 
-  // ─── fetch company promptpay ───────────────────────────────────────────────
+  // Create Omise charge and get QR image URL
+  const createOmiseCharge = useCallback(async (amount: number) => {
+    if (!shop?.id || omiseLoading || omiseQrUrl) return
+    setOmiseLoading(true)
+    try {
+      const res = await fetch('/api/omise/create-charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, shopId: shop.id }),
+      })
+      const data = await res.json()
+      if (data.qrCode) setOmiseQrUrl(data.qrCode)
+    } catch { /* ignore */ } finally {
+      setOmiseLoading(false)
+    }
+  }, [shop?.id, omiseLoading, omiseQrUrl])
+
+  // Poll every 4s to detect webhook payment confirmation
   useEffect(() => {
-    supabase.rpc('get_company_promptpay').then(({ data }) => {
-      setCompanyPromptpay(data ?? null)
-    })
-  }, [])
-
-  const monthlyQr = useMemo(() => {
-    try { return companyPromptpay ? generatePromptPayPayload(companyPromptpay, 199) : '' } catch { return '' }
-  }, [companyPromptpay])
-
-  const setupQr = useMemo(() => {
-    try { return companyPromptpay ? generatePromptPayPayload(companyPromptpay, 1399) : '' } catch { return '' }
-  }, [companyPromptpay])
+    if (!omiseQrUrl || omisePaid || !shop?.id) return
+    const prev = { expiry: shop.subscription_paid_until, paid: shop.setup_fee_paid }
+    const interval = setInterval(async () => {
+      const { data } = await supabase.from('shops').select('subscription_paid_until, setup_fee_paid').eq('id', shop.id!).single()
+      if (!data) return
+      if (data.subscription_paid_until !== prev.expiry || data.setup_fee_paid !== prev.paid) {
+        setOmisePaid(true)
+        setSubPaySuccess(true)
+        clearInterval(interval)
+        setTimeout(() => window.location.reload(), 1500)
+      }
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [omiseQrUrl, omisePaid, shop?.id])
 
   // Fair expiry: don't waste remaining trial days
   const calcFairExpiry = useCallback((s: typeof shop) => {
-    const localStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    const bkk = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(d)
+    const parseDate = (str: string) => new Date(str.slice(0, 10) + 'T00:00:00+07:00')
     const addMonth = (d: Date) => { const r = new Date(d); const day = r.getDate(); r.setMonth(r.getMonth() + 1); if (r.getDate() !== day) r.setDate(0); return r }
-    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const today = parseDate(bkk(new Date()))
     if (!s?.subscription_paid_until) {
       if (s?.first_product_at) {
-        const trialEnd = new Date(s.first_product_at); trialEnd.setHours(0, 0, 0, 0)
+        const trialEnd = parseDate(s.first_product_at)
         trialEnd.setDate(trialEnd.getDate() + 7)
         const base = trialEnd > today ? trialEnd : today
-        return localStr(addMonth(base))
+        return bkk(addMonth(base))
       }
-      return localStr(addMonth(today))
+      return bkk(addMonth(today))
     }
-    const orig = new Date(s.subscription_paid_until); orig.setHours(0, 0, 0, 0)
-    const daysLate = Math.floor((today.getTime() - orig.getTime()) / 86400000)
-    const base = daysLate > 7 ? today : orig
-    return localStr(addMonth(base))
+    const orig = parseDate(s.subscription_paid_until)
+    const base = orig > today ? orig : today
+    return bkk(addMonth(base))
   }, [])
 
-  // Handle early setup fee payment (QR ฿1,399)
-  const handleEarlySetupPaid = useCallback(async () => {
-    if (!shop?.id) return
-    setEarlyPayLoading(true)
-    try {
-      const newExpiry = calcFairExpiry(shop)
-      await supabase.from('shops').update({ setup_fee_paid: true, subscription_paid_until: newExpiry }).eq('id', shop.id)
-      setEarlyPaySuccess(true)
-      setTimeout(() => window.location.reload(), 1500)
-    } finally {
-      setEarlyPayLoading(false)
-    }
-  }, [shop?.id, shop?.first_product_at, calcFairExpiry])
 
   // Handle early referral code
   const handleEarlyReferral = useCallback(async () => {
@@ -162,19 +167,6 @@ export default function SettingsPage() {
     finally { setEarlyRefLoading(false) }
   }, [earlyRefCode, shop?.id, shop?.first_product_at, calcFairExpiry])
 
-  const handleMarkMonthlyPaid = useCallback(async () => {
-    if (!shop?.id) return
-    setSubPayLoading(true)
-    try {
-      // Use calcFairExpiry so trial days aren't wasted when paying early
-      const newExpiry = calcFairExpiry(shop)
-      await supabase.from('shops').update({ subscription_paid_until: newExpiry }).eq('id', shop.id)
-      setSubPaySuccess(true)
-      refreshShop?.()
-    } finally {
-      setSubPayLoading(false)
-    }
-  }, [shop?.id, shop?.subscription_paid_until, shop?.first_product_at, calcFairExpiry])
 
   // ─── load team (parallel) ─────────────────────────────────────────────────
   useEffect(() => {
@@ -401,21 +393,22 @@ export default function SettingsPage() {
 
       {/* Subscription Status */}
       {isOwner && shop && (() => {
-        const now = new Date()
-        const firstProduct = shop.first_product_at ? new Date(shop.first_product_at) : null
+        const bkkStr = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(d)
+        const parseBkk = (str: string) => new Date(str.slice(0, 10) + 'T00:00:00+07:00')
+        const today = parseBkk(bkkStr(new Date()))
+        const firstProduct = shop.first_product_at ? parseBkk(shop.first_product_at) : null
         const trialEnd = firstProduct ? new Date(firstProduct.getTime() + 7 * 24 * 60 * 60 * 1000) : null
-        const subDate = shop.subscription_paid_until ? new Date(shop.subscription_paid_until) : null
-        const today = new Date(); today.setHours(0, 0, 0, 0)
-        const subDay = subDate ? new Date(subDate) : null; subDay?.setHours(0, 0, 0, 0)
+        const subDay = shop.subscription_paid_until ? parseBkk(shop.subscription_paid_until) : null
+        const subDate = subDay
         const subExpired = !!(subDay && subDay < today)
-        const isInTrial = !subDate && !shop.setup_fee_paid && trialEnd && trialEnd > now
-        const daysLeft = subDate && subDay ? Math.floor((subDay.getTime() - today.getTime()) / 86400000) : null
+        const isInTrial = !subDate && !shop.setup_fee_paid && trialEnd && trialEnd > today
+        const daysLeft = subDay ? Math.floor((subDay.getTime() - today.getTime()) / 86400000) : null
         const daysOverdue = subExpired && subDay ? Math.floor((today.getTime() - subDay.getTime()) / 86400000) : 0
         const isNearExpiry = !subExpired && daysLeft !== null && daysLeft <= 3
 
         // Paid/referral user trial (setup_fee_paid=true, subscription_paid_until=null)
         const isPaidTrial = shop.setup_fee_paid && !subDate && !!trialEnd
-        const paidTrialDay = trialEnd ? new Date(trialEnd.getFullYear(), trialEnd.getMonth(), trialEnd.getDate()) : null
+        const paidTrialDay = trialEnd ? parseBkk(bkkStr(trialEnd)) : null
         const paidTrialDaysLeftSetting = paidTrialDay ? Math.floor((paidTrialDay.getTime() - today.getTime()) / 86400000) : null
         const isPaidTrialExpired = isPaidTrial && !!paidTrialDay && paidTrialDay < today
         const isPaidTrialNearExpiry = isPaidTrial && !isPaidTrialExpired && paidTrialDaysLeftSetting !== null && paidTrialDaysLeftSetting <= 3
@@ -501,7 +494,7 @@ export default function SettingsPage() {
                   <span className="text-sm text-amber-700 dark:text-amber-300">{t('settings.freeTrial')}</span>
                   <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
                     หมดอายุ {trialEnd.toLocaleDateString('th-TH')}
-                    <span className="ml-1 text-xs font-normal opacity-70">(อีก {Math.ceil((trialEnd.getTime() - now.getTime()) / 86400000)} วัน)</span>
+                    <span className="ml-1 text-xs font-normal opacity-70">(อีก {Math.ceil((trialEnd.getTime() - today.getTime()) / 86400000)} วัน)</span>
                   </span>
                 </div>
               )}
@@ -532,27 +525,20 @@ export default function SettingsPage() {
                   {/* Monthly payment — when expired or last day (paid member) */}
                   {(subExpired || isNearExpiry) && shop.setup_fee_paid && (
                     <div className={`pt-3 border-t ${subExpired ? 'border-red-200 dark:border-red-800/40' : 'border-amber-200 dark:border-amber-800/40'}`}>
-                      {subPaySuccess ? (
-                        <div className="text-center py-3 text-sm text-green-600 dark:text-green-400 font-semibold">✓ บันทึกแล้ว — รอ super admin ยืนยัน</div>
+                      <p className={`text-sm font-bold mb-3 text-center ${subExpired ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                        ชำระค่าบริการรายเดือน ฿199
+                      </p>
+                      {omisePaid ? (
+                        <div className="flex flex-col items-center gap-2 py-4"><CheckCircle2 size={40} className="text-green-500" /><p className="text-sm font-bold text-green-600">ชำระสำเร็จ! กำลังอัปเดต...</p></div>
+                      ) : omiseQrUrl ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <img src={omiseQrUrl} alt="PromptPay QR" className="w-44 h-44 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
+                          <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยันการชำระเงิน...</div>
+                        </div>
                       ) : (
-                        <>
-                          <p className={`text-sm font-bold mb-3 text-center ${subExpired ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
-                            ชำระค่าบริการรายเดือน ฿199
-                          </p>
-                          {monthlyQr ? (
-                            <div className="flex justify-center mb-3">
-                              <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
-                                <QRCodeSVG value={monthlyQr} size={160} />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="h-[184px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>
-                          )}
-                          {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500 mb-3">PromptPay: {companyPromptpay}</p>}
-                          <button onClick={handleMarkMonthlyPaid} disabled={subPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
-                            {subPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว — ต่ออายุ 1 เดือน'}
-                          </button>
-                        </>
+                        <button onClick={() => createOmiseCharge(199)} disabled={omiseLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
+                          {omiseLoading ? <><Loader2 size={14} className="animate-spin" />กำลังสร้าง QR...</> : 'แสดง QR ฿199'}
+                        </button>
                       )}
                     </div>
                   )}
@@ -562,26 +548,23 @@ export default function SettingsPage() {
               {/* Monthly QR — paid/referral user trial expired or near expiry */}
               {(isPaidTrialExpired || isPaidTrialNearExpiry) && (
                 <div className={`pt-3 border-t ${isPaidTrialExpired ? 'border-red-200 dark:border-red-800/40' : 'border-amber-200 dark:border-amber-800/40'}`}>
-                  {subPaySuccess ? (
-                    <div className="text-center py-3 text-sm text-green-600 dark:text-green-400 font-semibold">✓ บันทึกแล้ว — รอ super admin ยืนยัน</div>
-                  ) : (
+                  {(
                     <>
                       <p className={`text-sm font-bold mb-3 text-center ${isPaidTrialExpired ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
                         {isPaidTrialExpired ? 'หมดระยะทดลองใช้ฟรีแล้ว — ' : 'ระยะทดลองใช้กำลังจะหมด — '}ชำระค่าบริการรายเดือน ฿199
                       </p>
-                      {monthlyQr ? (
-                        <div className="flex justify-center mb-3">
-                          <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
-                            <QRCodeSVG value={monthlyQr} size={160} />
-                          </div>
+                      {omisePaid ? (
+                        <div className="flex flex-col items-center gap-2 py-4"><CheckCircle2 size={40} className="text-green-500" /><p className="text-sm font-bold text-green-600">ชำระสำเร็จ! กำลังอัปเดต...</p></div>
+                      ) : omiseQrUrl ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <img src={omiseQrUrl} alt="PromptPay QR" className="w-44 h-44 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
+                          <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยันการชำระเงิน...</div>
                         </div>
                       ) : (
-                        <div className="h-[184px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>
+                        <button onClick={() => createOmiseCharge(199)} disabled={omiseLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
+                          {omiseLoading ? <><Loader2 size={14} className="animate-spin" />กำลังสร้าง QR...</> : 'แสดง QR ฿199'}
+                        </button>
                       )}
-                      {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500 mb-3">PromptPay: {companyPromptpay}</p>}
-                      <button onClick={handleMarkMonthlyPaid} disabled={subPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
-                        {subPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว — ต่ออายุ 1 เดือน'}
-                      </button>
                     </>
                   )}
                 </div>
@@ -590,9 +573,7 @@ export default function SettingsPage() {
               {/* Early payment — referral/paid user in trial with >3 days left */}
               {isPaidTrial && !isPaidTrialExpired && !isPaidTrialNearExpiry && isOwner && (
                 <div className="pt-3 border-t border-gray-100 dark:border-slate-700">
-                  {subPaySuccess ? (
-                    <div className="text-center py-3 text-sm text-green-600 dark:text-green-400 font-semibold">✓ บันทึกแล้ว — รอ super admin ยืนยัน</div>
-                  ) : (
+                  {(
                     <>
                       <button
                         onClick={() => setShowEarlyPay(v => !v)}
@@ -608,17 +589,18 @@ export default function SettingsPage() {
                             ชำระวันนี้ → ต่ออายุนับจากวันหมด trial (<strong>{trialEnd?.toLocaleDateString('th-TH')}</strong>) + 1 เดือน
                           </p>
                           <p className="text-sm font-bold text-gray-800 dark:text-slate-200 text-center">ชำระค่าบริการรายเดือน ฿199</p>
-                          {monthlyQr ? (
-                            <div className="flex justify-center">
-                              <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
-                                <QRCodeSVG value={monthlyQr} size={150} />
-                              </div>
+                          {omisePaid ? (
+                            <div className="flex flex-col items-center gap-2 py-4"><CheckCircle2 size={40} className="text-green-500" /><p className="text-sm font-bold text-green-600">ชำระสำเร็จ!</p></div>
+                          ) : omiseQrUrl ? (
+                            <div className="flex flex-col items-center gap-3">
+                              <img src={omiseQrUrl} alt="PromptPay QR" className="w-40 h-40 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
+                              <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยัน...</div>
                             </div>
-                          ) : <div className="h-[174px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>}
-                          {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500">PromptPay: {companyPromptpay}</p>}
-                          <button onClick={handleMarkMonthlyPaid} disabled={subPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
-                            {subPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว ฿199'}
-                          </button>
+                          ) : (
+                            <button onClick={() => createOmiseCharge(199)} disabled={omiseLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
+                              {omiseLoading ? <><Loader2 size={14} className="animate-spin" />กำลังสร้าง QR...</> : 'แสดง QR ฿199'}
+                            </button>
+                          )}
                         </div>
                       )}
                     </>
@@ -626,7 +608,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Early payment — direct user (setup_fee_paid = false) who wants to pay before trial ends */}
+              {/* Early payment — direct user (setup_fee_paid=false) who wants to pay before trial ends */}
               {!shop.setup_fee_paid && isOwner && (
                 <div className="pt-3 border-t border-gray-100 dark:border-slate-700">
                   {earlyPaySuccess ? (
@@ -643,19 +625,20 @@ export default function SettingsPage() {
                       </button>
                       {showEarlyPay && (
                         <div className="mt-3 space-y-3">
-                          {/* QR ฿1,399 */}
+                          {/* QR ฿1,399 — Omise */}
                           <p className="text-sm font-bold text-gray-800 dark:text-slate-200 text-center">ชำระค่าแรกเข้า ฿1,399</p>
-                          {setupQr ? (
-                            <div className="flex justify-center">
-                              <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block shadow-sm">
-                                <QRCodeSVG value={setupQr} size={150} />
-                              </div>
+                          {omisePaid ? (
+                            <div className="flex flex-col items-center gap-2 py-4"><CheckCircle2 size={40} className="text-green-500" /><p className="text-sm font-bold text-green-600">ชำระสำเร็จ!</p></div>
+                          ) : omiseQrUrl ? (
+                            <div className="flex flex-col items-center gap-3">
+                              <img src={omiseQrUrl} alt="PromptPay QR" className="w-40 h-40 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
+                              <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยัน...</div>
                             </div>
-                          ) : <div className="h-[174px] flex items-center justify-center text-xs text-gray-400">กำลังโหลด QR...</div>}
-                          {companyPromptpay && <p className="text-xs text-center text-gray-400 dark:text-slate-500">PromptPay: {companyPromptpay}</p>}
-                          <button onClick={handleEarlySetupPaid} disabled={earlyPayLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition">
-                            {earlyPayLoading ? 'กำลังบันทึก...' : 'โอนแล้ว ฿1,399'}
-                          </button>
+                          ) : (
+                            <button onClick={() => createOmiseCharge(1399)} disabled={omiseLoading} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
+                              {omiseLoading ? <><Loader2 size={14} className="animate-spin" />กำลังสร้าง QR...</> : 'แสดง QR ฿1,399'}
+                            </button>
+                          )}
                           {/* Divider */}
                           <div className="flex items-center gap-3">
                             <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />

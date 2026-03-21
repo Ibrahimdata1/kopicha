@@ -1,9 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
-import { generatePromptPayPayload } from '@/lib/qr'
-import { AlertTriangle, Ticket, Check, Clock, ShieldOff, Mail } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { AlertTriangle, Ticket, Clock, ShieldOff, Mail, Loader2, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import { useI18n } from '@/lib/i18n/context'
 import type { Shop } from '@/lib/types'
@@ -18,37 +16,48 @@ interface Props {
   children: React.ReactNode
 }
 
+// Get today's date in Asia/Bangkok timezone as a midnight Date object
+function getBangkokToday(): Date {
+  const str = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date())
+  return new Date(str + 'T00:00:00+07:00')
+}
+
+// Convert any Date to YYYY-MM-DD string in Asia/Bangkok timezone
+function toBangkokDateStr(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(d)
+}
+
+// Parse a date string as midnight Bangkok time
+function parseBangkokDate(str: string): Date {
+  return new Date(str.slice(0, 10) + 'T00:00:00+07:00')
+}
+
 function getDaysOverdue(shop: Shop | null): number {
   if (!shop?.subscription_paid_until) return 0
-  const paidUntil = new Date(shop.subscription_paid_until)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  paidUntil.setHours(0, 0, 0, 0)
+  const paidUntil = parseBangkokDate(shop.subscription_paid_until)
+  const today = getBangkokToday()
   const diff = Math.floor((today.getTime() - paidUntil.getTime()) / (1000 * 60 * 60 * 24))
   return Math.max(0, diff)
 }
 
 function getDaysUntilExpiry(shop: Shop | null): number {
   if (!shop?.subscription_paid_until) return Infinity
-  const paidUntil = new Date(shop.subscription_paid_until)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  paidUntil.setHours(0, 0, 0, 0)
+  const paidUntil = parseBangkokDate(shop.subscription_paid_until)
+  const today = getBangkokToday()
   return Math.floor((paidUntil.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }
 
 function getTrialDaysLeft(shop: Shop | null): number {
   if (!shop?.first_product_at) return -1 // -1 means no trial started (unlimited)
-  const firstProduct = new Date(shop.first_product_at)
+  const firstProduct = parseBangkokDate(shop.first_product_at)
   const expiry = new Date(firstProduct.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
-  const now = new Date()
-  const diff = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const today = getBangkokToday()
+  const diff = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   return Math.max(0, diff)
 }
 
 function toLocalDateStr(d: Date): string {
-  // Use local year/month/day to avoid UTC timezone shift
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return toBangkokDateStr(d)
 }
 
 function addOneMonth(date: Date): Date {
@@ -61,13 +70,11 @@ function addOneMonth(date: Date): Date {
 }
 
 function calcNewExpiry(shop: Shop | null): string {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = getBangkokToday()
 
   if (!shop?.subscription_paid_until) {
     if (shop?.first_product_at) {
-      const trialEnd = new Date(shop.first_product_at)
-      trialEnd.setHours(0, 0, 0, 0)
+      const trialEnd = parseBangkokDate(shop.first_product_at)
       trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS)
       const base = trialEnd > today ? trialEnd : today
       return toLocalDateStr(addOneMonth(base))
@@ -75,15 +82,9 @@ function calcNewExpiry(shop: Shop | null): string {
     return toLocalDateStr(addOneMonth(today))
   }
 
-  const originalExpiry = new Date(shop.subscription_paid_until)
-  originalExpiry.setHours(0, 0, 0, 0)
-  const daysLate = Math.floor((today.getTime() - originalExpiry.getTime()) / (1000 * 60 * 60 * 24))
-
-  if (daysLate > GRACE_DAYS) {
-    return toLocalDateStr(addOneMonth(today))
-  } else {
-    return toLocalDateStr(addOneMonth(originalExpiry))
-  }
+  const originalExpiry = parseBangkokDate(shop.subscription_paid_until)
+  const base = originalExpiry > today ? originalExpiry : today
+  return toLocalDateStr(addOneMonth(base))
 }
 
 
@@ -92,16 +93,47 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   const [referralError, setReferralError] = useState('')
   const [referralLoading, setReferralLoading] = useState(false)
   const [setupFeePaid, setSetupFeePaid] = useState(shop?.setup_fee_paid ?? false)
-  const [companyPromptpay, setCompanyPromptpay] = useState<string | null>(null)
+  const [omiseQrUrl, setOmiseQrUrl] = useState<string | null>(null)
+  const [omiseLoading, setOmiseLoading] = useState(false)
+  const [omisePaid, setOmisePaid] = useState(false)
+  const [omiseAmount, setOmiseAmount] = useState(0)
   const { t } = useI18n()
 
-  // Fetch company PromptPay via DB function (bypasses RLS)
+  // Create Omise PromptPay charge and get QR
+  const createCharge = useCallback(async (amount: number) => {
+    if (!shop?.id || omiseLoading || omiseQrUrl) return
+    setOmiseLoading(true)
+    setOmiseAmount(amount)
+    try {
+      const res = await fetch('/api/omise/create-charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, shopId: shop.id }),
+      })
+      const data = await res.json()
+      if (data.qrCode) setOmiseQrUrl(data.qrCode)
+    } catch { /* ignore */ } finally {
+      setOmiseLoading(false)
+    }
+  }, [shop?.id, omiseLoading, omiseQrUrl])
+
+  // Poll every 4s — detect when webhook updates subscription
   useEffect(() => {
+    if (!omiseQrUrl || omisePaid) return
     const supabase = createClient()
-    supabase.rpc('get_company_promptpay').then(({ data }) => {
-      setCompanyPromptpay(data ?? '0994569544')
-    })
-  }, [])
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('shops').select('subscription_paid_until, setup_fee_paid').eq('id', shop!.id).single()
+      if (!data) return
+      const changed = data.subscription_paid_until !== shop?.subscription_paid_until || data.setup_fee_paid !== shop?.setup_fee_paid
+      if (changed) {
+        setOmisePaid(true)
+        clearInterval(interval)
+        setTimeout(() => window.location.reload(), 1500)
+      }
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [omiseQrUrl, omisePaid, shop?.id])
 
   // ═══ ร้านถูกลบ (soft delete) → แสดงหน้าระงับ ═══
   if (shop?.is_deleted) {
@@ -133,11 +165,10 @@ export default function SubscriptionGuard({ shop, children }: Props) {
 
   // Paid/referral user trial (setup_fee_paid=true, subscription_paid_until=null)
   // Trial starts from first_product_at, just like direct users
-  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const today = getBangkokToday()
   const paidTrialEnd = (() => {
     if (!setupFeePaid || shop?.subscription_paid_until || !shop?.first_product_at) return null
-    const d = new Date(shop.first_product_at)
-    d.setHours(0, 0, 0, 0)
+    const d = parseBangkokDate(shop.first_product_at)
     d.setDate(d.getDate() + TRIAL_DAYS)
     return d
   })()
@@ -205,25 +236,6 @@ export default function SubscriptionGuard({ shop, children }: Props) {
     }
   }, [referralCode, shop?.id])
 
-  const handleMarkPaid = useCallback(async () => {
-    if (!shop?.id) return
-    try {
-      const supabase = createClient()
-      await supabase
-        .from('shops')
-        .update({ setup_fee_paid: true, subscription_paid_until: calcNewExpiry(shop) })
-        .eq('id', shop.id)
-      setSetupFeePaid(true)
-    } catch { /* ignore */ }
-  }, [shop?.id])
-
-  const setupQr = useMemo(() => {
-    try { return companyPromptpay ? generatePromptPayPayload(companyPromptpay, SETUP_FEE) : '' } catch { return '' }
-  }, [companyPromptpay])
-
-  const monthlyQr = useMemo(() => {
-    try { return companyPromptpay ? generatePromptPayPayload(companyPromptpay, MONTHLY_FEE) : '' } catch { return '' }
-  }, [companyPromptpay])
 
   // === SETUP FEE PAYWALL (trial expired, hasn't paid ฿999) ===
   if (trialExpired && !setupFeePaid) {
@@ -242,30 +254,33 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             </p>
           </div>
 
-          {/* QR Payment */}
+          {/* QR Payment — Omise */}
           <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-5 mb-4">
             <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3 text-center">
               {t('sub.setupFee', { amount: `฿${SETUP_FEE.toLocaleString()}` })}
             </p>
-            {setupQr && (
-              <div className="flex justify-center mb-3">
-                <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block">
-                  <QRCodeSVG value={setupQr} size={180} />
+            {omisePaid ? (
+              <div className="flex flex-col items-center gap-2 py-6">
+                <CheckCircle2 size={48} className="text-green-500" />
+                <p className="text-sm font-bold text-green-600">ชำระสำเร็จ! กำลังอัปเดต...</p>
+              </div>
+            ) : omiseQrUrl ? (
+              <div className="flex flex-col items-center gap-3">
+                <img src={omiseQrUrl} alt="PromptPay QR" className="w-48 h-48 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 size={12} className="animate-spin" />
+                  รอการยืนยันการชำระเงิน...
                 </div>
               </div>
+            ) : (
+              <button
+                onClick={() => createCharge(SETUP_FEE)}
+                disabled={omiseLoading}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2"
+              >
+                {omiseLoading ? <><Loader2 size={16} className="animate-spin" />กำลังสร้าง QR...</> : 'แสดง QR สำหรับชำระเงิน'}
+              </button>
             )}
-            <p className="text-xs text-gray-500 dark:text-stone-500 text-center">
-              {t('sub.scanQR')}
-            </p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 text-center">
-              PromptPay: {companyPromptpay}
-            </p>
-            <button
-              onClick={handleMarkPaid}
-              className="mt-4 w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition"
-            >
-              {t('sub.transferred')}
-            </button>
           </div>
 
           {/* Divider */}
@@ -335,36 +350,32 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           </div>
 
           <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-5 mb-4">
-            <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3">
+            <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3 text-center">
               {t('sub.fee', { amount: `฿${MONTHLY_FEE}` })}
             </p>
-            {monthlyQr && (
-              <div className="flex justify-center mb-3">
-                <div className="p-3 bg-white border border-gray-200 dark:border-slate-600 rounded-xl inline-block">
-                  <QRCodeSVG value={monthlyQr} size={180} />
+            {omisePaid ? (
+              <div className="flex flex-col items-center gap-2 py-6">
+                <CheckCircle2 size={48} className="text-green-500" />
+                <p className="text-sm font-bold text-green-600">ชำระสำเร็จ! กำลังอัปเดต...</p>
+              </div>
+            ) : omiseQrUrl ? (
+              <div className="flex flex-col items-center gap-3">
+                <img src={omiseQrUrl} alt="PromptPay QR" className="w-48 h-48 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 size={12} className="animate-spin" />
+                  รอการยืนยันการชำระเงิน...
                 </div>
               </div>
+            ) : (
+              <button
+                onClick={() => createCharge(MONTHLY_FEE)}
+                disabled={omiseLoading}
+                className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2"
+              >
+                {omiseLoading ? <><Loader2 size={16} className="animate-spin" />กำลังสร้าง QR...</> : 'แสดง QR สำหรับชำระเงิน'}
+              </button>
             )}
-            <p className="text-xs text-gray-500 dark:text-stone-500">
-              {t('sub.scanQR')}
-            </p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-              PromptPay: {companyPromptpay}
-            </p>
           </div>
-
-          <button
-            onClick={async () => {
-              if (!shop?.id) return
-              const supabase = createClient()
-              await supabase.from('shops').update({ subscription_paid_until: calcNewExpiry(shop) }).eq('id', shop.id)
-              await new Promise(r => setTimeout(r, 600))
-              window.location.reload()
-            }}
-            className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm transition mt-2"
-          >
-            {t('sub.paidExtend')}
-          </button>
         </div>
       </div>
     )
