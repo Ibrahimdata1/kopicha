@@ -38,8 +38,9 @@ export default function PosNav({ profile }: Props) {
     ...(!isCashier ? [
       { href: '/pos/products', label: t('nav.products'), Icon: Package },
       { href: '/pos/dashboard', label: t('nav.summary'), Icon: BarChart3 },
-      { href: '/pos/settings', label: t('nav.settings'), Icon: Settings },
     ] : []),
+    // Settings — visible to all (cashier sees read-only)
+    { href: '/pos/settings', label: t('nav.settings'), Icon: Settings },
   ]
 
   const handleSignOut = async () => {

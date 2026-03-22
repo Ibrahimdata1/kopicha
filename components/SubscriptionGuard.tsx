@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Ticket, Clock, ShieldOff, Mail, Loader2, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-browser'
 import { useI18n } from '@/lib/i18n/context'
@@ -13,6 +13,7 @@ const GRACE_DAYS = 7 // days after expiry before blocking (service still active)
 
 interface Props {
   shop: Shop | null
+  role?: string | null
   children: React.ReactNode
 }
 
@@ -88,22 +89,30 @@ function calcNewExpiry(shop: Shop | null): string {
 }
 
 
-export default function SubscriptionGuard({ shop, children }: Props) {
+export default function SubscriptionGuard({ shop, role, children }: Props) {
+  const isCashier = role === 'cashier'
   const [referralCode, setReferralCode] = useState('')
   const [referralError, setReferralError] = useState('')
   const [referralLoading, setReferralLoading] = useState(false)
   const [setupFeePaid, setSetupFeePaid] = useState(shop?.setup_fee_paid ?? false)
   const [omiseQrUrl, setOmiseQrUrl] = useState<string | null>(null)
+  const [omiseChargeId, setOmiseChargeId] = useState<string | null>(null)
   const [omiseLoading, setOmiseLoading] = useState(false)
   const [omisePaid, setOmisePaid] = useState(false)
+  const [omiseFailed, setOmiseFailed] = useState<string | false>(false)
   const [omiseAmount, setOmiseAmount] = useState(0)
+  const [omiseCountdown, setOmiseCountdown] = useState(0)
+  const omiseCreatedAt = useRef<number>(0)
   const { t } = useI18n()
+
+  const QR_TIMEOUT = 5 * 60 // 5 minutes
 
   // Create Omise PromptPay charge and get QR
   const createCharge = useCallback(async (amount: number) => {
     if (!shop?.id || omiseLoading || omiseQrUrl) return
     setOmiseLoading(true)
     setOmiseAmount(amount)
+    setOmiseFailed(false)
     try {
       const res = await fetch('/api/omise/create-charge', {
         method: 'POST',
@@ -111,17 +120,60 @@ export default function SubscriptionGuard({ shop, children }: Props) {
         body: JSON.stringify({ amount, shopId: shop.id }),
       })
       const data = await res.json()
-      if (data.qrCode) setOmiseQrUrl(data.qrCode)
+      if (data.qrCode) {
+        setOmiseQrUrl(data.qrCode)
+        omiseCreatedAt.current = Date.now()
+        setOmiseCountdown(QR_TIMEOUT)
+      }
+      if (data.chargeId) setOmiseChargeId(data.chargeId)
     } catch { /* ignore */ } finally {
       setOmiseLoading(false)
     }
   }, [shop?.id, omiseLoading, omiseQrUrl])
 
-  // Poll every 4s — detect when webhook updates subscription
+  // Countdown timer — tick every 1s
   useEffect(() => {
-    if (!omiseQrUrl || omisePaid) return
+    if (!omiseQrUrl || omisePaid || omiseFailed) return
+    const timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - omiseCreatedAt.current) / 1000)
+      const remaining = QR_TIMEOUT - elapsed
+      if (remaining <= 0) {
+        setOmiseFailed('timeout')
+        setOmiseCountdown(0)
+        clearInterval(timer)
+      } else {
+        setOmiseCountdown(remaining)
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [omiseQrUrl, omisePaid, omiseFailed])
+
+  // Poll every 4s — check charge status from Omise + subscription update
+  useEffect(() => {
+    if (!omiseQrUrl || omisePaid || omiseFailed) return
     const supabase = createClient()
     const interval = setInterval(async () => {
+      if (omiseChargeId) {
+        try {
+          const res = await fetch('/api/omise/check-charge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chargeId: omiseChargeId }),
+          })
+          const charge = await res.json()
+          if (charge.status === 'failed' || charge.status === 'expired' || charge.status === 'reversed') {
+            setOmiseFailed('failed')
+            clearInterval(interval)
+            return
+          }
+          if (charge.status === 'successful') {
+            setOmisePaid(true)
+            clearInterval(interval)
+            setTimeout(() => window.location.reload(), 1500)
+            return
+          }
+        } catch { /* ignore */ }
+      }
       const { data } = await supabase
         .from('shops').select('subscription_paid_until, setup_fee_paid').eq('id', shop!.id).single()
       if (!data) return
@@ -133,7 +185,34 @@ export default function SubscriptionGuard({ shop, children }: Props) {
       }
     }, 4000)
     return () => clearInterval(interval)
-  }, [omiseQrUrl, omisePaid, shop?.id])
+  }, [omiseQrUrl, omiseChargeId, omisePaid, omiseFailed, shop?.id])
+
+  // Reset and immediately create new QR
+  const retryOmise = useCallback(async () => {
+    const amount = omiseAmount
+    setOmiseQrUrl(null)
+    setOmiseChargeId(null)
+    setOmiseFailed(false)
+    setOmisePaid(false)
+    setOmiseLoading(true)
+    setOmiseCountdown(0)
+    try {
+      const res = await fetch('/api/omise/create-charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, shopId: shop?.id }),
+      })
+      const data = await res.json()
+      if (data.qrCode) {
+        setOmiseQrUrl(data.qrCode)
+        omiseCreatedAt.current = Date.now()
+        setOmiseCountdown(QR_TIMEOUT)
+      }
+      if (data.chargeId) setOmiseChargeId(data.chargeId)
+    } catch { /* ignore */ } finally {
+      setOmiseLoading(false)
+    }
+  }, [omiseAmount, shop?.id])
 
   // ═══ ร้านถูกลบ (soft delete) → แสดงหน้าระงับ ═══
   if (shop?.is_deleted) {
@@ -237,6 +316,67 @@ export default function SubscriptionGuard({ shop, children }: Props) {
   }, [referralCode, shop?.id])
 
 
+  // === CASHIER BLOCKED — show payment QR so cashier can pay on behalf of owner ===
+  if (isCashier && ((trialExpired && !setupFeePaid) || isBlocked)) {
+    const cashierAmount = (trialExpired && !setupFeePaid) ? SETUP_FEE : MONTHLY_FEE
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-red-200 dark:border-red-800/40 w-full max-w-sm p-8 text-center">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ShieldOff size={30} className="text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">
+            ระบบถูกระงับชั่วคราว
+          </h2>
+          <p className="text-gray-600 dark:text-stone-500 text-sm mb-4">
+            สมาชิกร้าน <strong>{shop?.name}</strong> หมดอายุแล้ว
+          </p>
+
+          <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-5 mb-4">
+            <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3">
+              ชำระ ฿{cashierAmount.toLocaleString()} เพื่อใช้งานต่อ
+            </p>
+            {omisePaid ? (
+              <div className="flex flex-col items-center gap-2 py-6">
+                <CheckCircle2 size={48} className="text-green-500" />
+                <p className="text-sm font-bold text-green-600">ชำระสำเร็จ! กำลังอัปเดต...</p>
+              </div>
+            ) : omiseQrUrl ? (
+              <div className="flex flex-col items-center gap-3">
+                <img src={omiseQrUrl} alt="PromptPay QR" className="w-48 h-48 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
+                {omiseFailed ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-xs text-red-500 font-semibold">{omiseFailed === 'timeout' ? 'QR หมดเวลา' : 'การชำระเงินไม่สำเร็จ'}</p>
+                    <button onClick={retryOmise} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg transition">สร้าง QR ใหม่</button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Loader2 size={12} className="animate-spin" />
+                      รอการยืนยันการชำระเงิน...
+                    </div>
+                    {omiseCountdown > 0 && (
+                      <p className="text-xs text-gray-400">เหลือเวลา {Math.floor(omiseCountdown / 60)}:{String(omiseCountdown % 60).padStart(2, '0')}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => createCharge(cashierAmount)}
+                disabled={omiseLoading}
+                className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2"
+              >
+                {omiseLoading ? <><Loader2 size={16} className="animate-spin" />กำลังสร้าง QR...</> : 'แสดง QR สำหรับชำระเงิน'}
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 dark:text-stone-500">หรือแจ้งเจ้าของร้านให้ชำระผ่านหน้าตั้งค่า</p>
+        </div>
+      </div>
+    )
+  }
+
   // === SETUP FEE PAYWALL (trial expired, hasn't paid ฿999) ===
   if (trialExpired && !setupFeePaid) {
     return (
@@ -267,10 +407,22 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             ) : omiseQrUrl ? (
               <div className="flex flex-col items-center gap-3">
                 <img src={omiseQrUrl} alt="PromptPay QR" className="w-48 h-48 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Loader2 size={12} className="animate-spin" />
-                  รอการยืนยันการชำระเงิน...
-                </div>
+                {omiseFailed ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-xs text-red-500 font-semibold">{omiseFailed === 'timeout' ? 'QR หมดเวลา' : 'การชำระเงินไม่สำเร็จ'}</p>
+                    <button onClick={retryOmise} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg transition">สร้าง QR ใหม่</button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Loader2 size={12} className="animate-spin" />
+                      รอการยืนยันการชำระเงิน...
+                    </div>
+                    {omiseCountdown > 0 && (
+                      <p className="text-xs text-gray-400">เหลือเวลา {Math.floor(omiseCountdown / 60)}:{String(omiseCountdown % 60).padStart(2, '0')}</p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <button
@@ -361,10 +513,22 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             ) : omiseQrUrl ? (
               <div className="flex flex-col items-center gap-3">
                 <img src={omiseQrUrl} alt="PromptPay QR" className="w-48 h-48 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Loader2 size={12} className="animate-spin" />
-                  รอการยืนยันการชำระเงิน...
-                </div>
+                {omiseFailed ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-xs text-red-500 font-semibold">{omiseFailed === 'timeout' ? 'QR หมดเวลา' : 'การชำระเงินไม่สำเร็จ'}</p>
+                    <button onClick={retryOmise} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg transition">สร้าง QR ใหม่</button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Loader2 size={12} className="animate-spin" />
+                      รอการยืนยันการชำระเงิน...
+                    </div>
+                    {omiseCountdown > 0 && (
+                      <p className="text-xs text-gray-400">เหลือเวลา {Math.floor(omiseCountdown / 60)}:{String(omiseCountdown % 60).padStart(2, '0')}</p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <button
@@ -391,7 +555,8 @@ export default function SubscriptionGuard({ shop, children }: Props) {
             {daysUntilExpiry === 0
               ? `การทดลองใช้ฟรีหมดอายุวันนี้ — กรุณาชำระค่าบริการ ฿${MONTHLY_FEE} เพื่อใช้งานต่อ`
               : `การทดลองใช้ฟรีจะหมดอายุในอีก ${daysUntilExpiry} วัน — กรุณาชำระค่าบริการ ฿${MONTHLY_FEE}`}
-            {' · '}<a href="/pos/settings" className="underline font-semibold hover:text-amber-900 dark:hover:text-amber-100">ชำระเงิน</a>
+            {' · '}
+            <a href="/pos/settings" className="underline font-semibold hover:text-amber-900 dark:hover:text-amber-100">ชำระเงิน</a>
           </p>
         </div>
       )}
@@ -402,7 +567,8 @@ export default function SubscriptionGuard({ shop, children }: Props) {
           <p className="text-sm text-amber-800 dark:text-amber-200">
             <Clock size={14} className="inline mr-1" />
             {t('sub.trialRemaining', { days: String(trialDaysLeft), amount: `฿${SETUP_FEE.toLocaleString()}` })}
-            {' · '}<a href="/pos/settings" className="underline font-semibold hover:text-amber-900 dark:hover:text-amber-100">ชำระเงิน</a>
+            {' · '}
+            <a href="/pos/settings" className="underline font-semibold hover:text-amber-900 dark:hover:text-amber-100">ชำระเงิน</a>
           </p>
         </div>
       )}

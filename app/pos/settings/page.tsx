@@ -78,8 +78,13 @@ export default function SettingsPage() {
   // Subscription payment
   const [subPaySuccess, setSubPaySuccess] = useState(false)
   const [omiseQrUrl, setOmiseQrUrl] = useState<string | null>(null)
+  const [omiseChargeId, setOmiseChargeId] = useState<string | null>(null)
   const [omiseLoading, setOmiseLoading] = useState(false)
   const [omisePaid, setOmisePaid] = useState(false)
+  const [omiseFailed, setOmiseFailed] = useState<string | false>(false)
+  const [omiseCountdown, setOmiseCountdown] = useState(0)
+  const omiseCreatedAt = useRef<number>(0)
+  const QR_TIMEOUT = 5 * 60
 
   // Early payment (trial user paying before trial ends)
   const [showEarlyPay, setShowEarlyPay] = useState(false)
@@ -98,6 +103,8 @@ export default function SettingsPage() {
   const createOmiseCharge = useCallback(async (amount: number) => {
     if (!shop?.id || omiseLoading || omiseQrUrl) return
     setOmiseLoading(true)
+    setOmiseFailed(false)
+    setLastOmiseAmount(amount)
     try {
       const res = await fetch('/api/omise/create-charge', {
         method: 'POST',
@@ -105,17 +112,85 @@ export default function SettingsPage() {
         body: JSON.stringify({ amount, shopId: shop.id }),
       })
       const data = await res.json()
-      if (data.qrCode) setOmiseQrUrl(data.qrCode)
+      if (data.qrCode) { setOmiseQrUrl(data.qrCode); omiseCreatedAt.current = Date.now(); setOmiseCountdown(QR_TIMEOUT) }
+      if (data.chargeId) setOmiseChargeId(data.chargeId)
     } catch { /* ignore */ } finally {
       setOmiseLoading(false)
     }
   }, [shop?.id, omiseLoading, omiseQrUrl])
 
-  // Poll every 4s to detect webhook payment confirmation
+  const [lastOmiseAmount, setLastOmiseAmount] = useState(0)
+
+  // Reset and immediately create new QR
+  const retryOmise = useCallback(async () => {
+    const amount = lastOmiseAmount
+    if (!shop?.id || !amount) return
+    setOmiseQrUrl(null)
+    setOmiseChargeId(null)
+    setOmiseFailed(false)
+    setOmisePaid(false)
+    setOmiseLoading(true)
+    setOmiseCountdown(0)
+    try {
+      const res = await fetch('/api/omise/create-charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, shopId: shop.id }),
+      })
+      const data = await res.json()
+      if (data.qrCode) { setOmiseQrUrl(data.qrCode); omiseCreatedAt.current = Date.now(); setOmiseCountdown(QR_TIMEOUT) }
+      if (data.chargeId) setOmiseChargeId(data.chargeId)
+    } catch { /* ignore */ } finally {
+      setOmiseLoading(false)
+    }
+  }, [lastOmiseAmount, shop?.id])
+
+  // Countdown timer
   useEffect(() => {
-    if (!omiseQrUrl || omisePaid || !shop?.id) return
+    if (!omiseQrUrl || omisePaid || omiseFailed) return
+    const timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - omiseCreatedAt.current) / 1000)
+      const remaining = QR_TIMEOUT - elapsed
+      if (remaining <= 0) {
+        setOmiseFailed('timeout')
+        setOmiseCountdown(0)
+        clearInterval(timer)
+      } else {
+        setOmiseCountdown(remaining)
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [omiseQrUrl, omisePaid, omiseFailed])
+
+  // Poll every 4s — check charge status + shop data
+  useEffect(() => {
+    if (!omiseQrUrl || omisePaid || omiseFailed || !shop?.id) return
     const prev = { expiry: shop.subscription_paid_until, paid: shop.setup_fee_paid }
     const interval = setInterval(async () => {
+      // Check charge status from Omise API
+      if (omiseChargeId) {
+        try {
+          const res = await fetch('/api/omise/check-charge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chargeId: omiseChargeId }),
+          })
+          const charge = await res.json()
+          if (charge.status === 'failed' || charge.status === 'expired' || charge.status === 'reversed') {
+            setOmiseFailed('failed')
+            clearInterval(interval)
+            return
+          }
+          if (charge.status === 'successful') {
+            setOmisePaid(true)
+            setSubPaySuccess(true)
+            clearInterval(interval)
+            setTimeout(() => window.location.reload(), 1500)
+            return
+          }
+        } catch { /* ignore */ }
+      }
+      // Also check shop data
       const { data } = await supabase.from('shops').select('subscription_paid_until, setup_fee_paid').eq('id', shop.id!).single()
       if (!data) return
       if (data.subscription_paid_until !== prev.expiry || data.setup_fee_paid !== prev.paid) {
@@ -126,7 +201,7 @@ export default function SettingsPage() {
       }
     }, 4000)
     return () => clearInterval(interval)
-  }, [omiseQrUrl, omisePaid, shop?.id])
+  }, [omiseQrUrl, omiseChargeId, omisePaid, omiseFailed, shop?.id])
 
   // Fair expiry: don't waste remaining trial days
   const calcFairExpiry = useCallback((s: typeof shop) => {
@@ -392,7 +467,7 @@ export default function SettingsPage() {
       )}
 
       {/* Subscription Status */}
-      {isOwner && shop && (() => {
+      {(isOwner || profile?.role === 'cashier') && shop && (() => {
         const bkkStr = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(d)
         const parseBkk = (str: string) => new Date(str.slice(0, 10) + 'T00:00:00+07:00')
         const today = parseBkk(bkkStr(new Date()))
@@ -533,7 +608,7 @@ export default function SettingsPage() {
                       ) : omiseQrUrl ? (
                         <div className="flex flex-col items-center gap-3">
                           <img src={omiseQrUrl} alt="PromptPay QR" className="w-44 h-44 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
-                          <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยันการชำระเงิน...</div>
+                          {omiseFailed ? <div className="flex flex-col items-center gap-2"><p className="text-xs text-red-500 font-semibold">{omiseFailed === 'timeout' ? 'QR หมดเวลา' : 'การชำระเงินไม่สำเร็จ'}</p><button onClick={retryOmise} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg transition">สร้าง QR ใหม่</button></div> : <div className="flex flex-col items-center gap-1"><div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยันการชำระเงิน...</div>{omiseCountdown > 0 && <p className="text-xs text-gray-400">เหลือเวลา {Math.floor(omiseCountdown / 60)}:{String(omiseCountdown % 60).padStart(2, '0')}</p>}</div>}
                         </div>
                       ) : (
                         <button onClick={() => createOmiseCharge(199)} disabled={omiseLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
@@ -558,7 +633,7 @@ export default function SettingsPage() {
                       ) : omiseQrUrl ? (
                         <div className="flex flex-col items-center gap-3">
                           <img src={omiseQrUrl} alt="PromptPay QR" className="w-44 h-44 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
-                          <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยันการชำระเงิน...</div>
+                          {omiseFailed ? <div className="flex flex-col items-center gap-2"><p className="text-xs text-red-500 font-semibold">{omiseFailed === 'timeout' ? 'QR หมดเวลา' : 'การชำระเงินไม่สำเร็จ'}</p><button onClick={retryOmise} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg transition">สร้าง QR ใหม่</button></div> : <div className="flex flex-col items-center gap-1"><div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยันการชำระเงิน...</div>{omiseCountdown > 0 && <p className="text-xs text-gray-400">เหลือเวลา {Math.floor(omiseCountdown / 60)}:{String(omiseCountdown % 60).padStart(2, '0')}</p>}</div>}
                         </div>
                       ) : (
                         <button onClick={() => createOmiseCharge(199)} disabled={omiseLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
@@ -594,7 +669,7 @@ export default function SettingsPage() {
                           ) : omiseQrUrl ? (
                             <div className="flex flex-col items-center gap-3">
                               <img src={omiseQrUrl} alt="PromptPay QR" className="w-40 h-40 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
-                              <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยัน...</div>
+                              {omiseFailed ? <div className="flex flex-col items-center gap-2"><p className="text-xs text-red-500 font-semibold">การชำระเงินไม่สำเร็จ</p><button onClick={retryOmise} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg transition">สร้าง QR ใหม่</button></div> : <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยัน...</div>}
                             </div>
                           ) : (
                             <button onClick={() => createOmiseCharge(199)} disabled={omiseLoading} className="w-full py-2.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
@@ -632,7 +707,7 @@ export default function SettingsPage() {
                           ) : omiseQrUrl ? (
                             <div className="flex flex-col items-center gap-3">
                               <img src={omiseQrUrl} alt="PromptPay QR" className="w-40 h-40 rounded-xl border border-gray-200 dark:border-slate-600 bg-white" />
-                              <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยัน...</div>
+                              {omiseFailed ? <div className="flex flex-col items-center gap-2"><p className="text-xs text-red-500 font-semibold">การชำระเงินไม่สำเร็จ</p><button onClick={retryOmise} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg transition">สร้าง QR ใหม่</button></div> : <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 size={12} className="animate-spin" />รอการยืนยัน...</div>}
                             </div>
                           ) : (
                             <button onClick={() => createOmiseCharge(1399)} disabled={omiseLoading} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2">
@@ -671,7 +746,29 @@ export default function SettingsPage() {
         )
       })()}
 
-      {/* Shop Settings */}
+      {/* Shop Info — cashier read-only view */}
+      {profile?.role === 'cashier' && shop && (
+        <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Store size={16} className="text-gray-400 dark:text-slate-500" />
+            <h2 className="font-bold text-gray-900 dark:text-slate-100">{t('settings.shopInfo')}</h2>
+          </div>
+          <div className="space-y-3 text-sm">
+            {shop.logo_url && (
+              <div className="flex items-center gap-3">
+                <Image src={shop.logo_url} alt="Logo" width={40} height={40} className="rounded-lg object-cover" />
+                <span className="font-medium text-gray-900 dark:text-slate-100">{shop.name}</span>
+              </div>
+            )}
+            {!shop.logo_url && <p><span className="text-gray-500">{t('settings.shopName')}:</span> <strong className="text-gray-900 dark:text-slate-100">{shop.name}</strong></p>}
+            {shop.promptpay_id && <p><span className="text-gray-500">PromptPay:</span> <strong className="text-gray-900 dark:text-slate-100">{shop.promptpay_id}</strong></p>}
+            <p><span className="text-gray-500">{t('settings.tableCount')}:</span> <strong className="text-gray-900 dark:text-slate-100">{shop.table_count ?? 0}</strong></p>
+            <p><span className="text-gray-500">{t('settings.paymentSystem')}:</span> <strong className="text-gray-900 dark:text-slate-100">{shop.payment_mode === 'auto' ? t('settings.autoPayment') : t('settings.payAtCounter')}</strong></p>
+          </div>
+        </section>
+      )}
+
+      {/* Shop Settings — owner/admin editable */}
       {(isOwner || isSuperAdmin) && shop && (
         <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -803,7 +900,7 @@ export default function SettingsPage() {
       )}
 
       {/* Team */}
-      {(isOwner || isSuperAdmin) && shop && (
+      {(isOwner || isSuperAdmin || profile?.role === 'cashier') && shop && (
         <section className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Users size={16} className="text-gray-400 dark:text-slate-500" />
@@ -844,7 +941,7 @@ export default function SettingsPage() {
                         {ROLE_LABEL[member.role ?? ''] ?? member.role}
                         {!isCashier && member.email ? ` · ${member.email}` : ''}
                       </p>
-                      {isCashier && (
+                      {isCashier && (isOwner || isSuperAdmin) && (
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {cashierCreds[member.id] ? (
                             <>
@@ -873,7 +970,7 @@ export default function SettingsPage() {
                       )}
                     </div>
                   </div>
-                  {!isMe && (
+                  {!isMe && (isOwner || isSuperAdmin) && (
                     <div className="flex gap-1.5 shrink-0">
                       {isCashier && (
                         <button
@@ -927,7 +1024,8 @@ export default function SettingsPage() {
           </div>
 
 
-          {/* Add cashier form */}
+          {/* Add cashier form — owner/admin only */}
+          {(isOwner || isSuperAdmin) && (<>
           <div className="flex items-center gap-2 mb-3">
             <UserPlus size={15} className="text-gray-400 dark:text-slate-500" />
             <h3 className="font-semibold text-gray-700 dark:text-slate-300 text-sm">{t('settings.addCashier')}</h3>
@@ -988,6 +1086,7 @@ export default function SettingsPage() {
               <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
             )}
           </form>
+          </>)}
 
         </section>
       )}

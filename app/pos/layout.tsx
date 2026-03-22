@@ -10,7 +10,7 @@ import OrderNotification from '@/components/OrderNotification'
 export const dynamic = 'force-dynamic'
 
 // Pages that cashier cannot access
-const CASHIER_BLOCKED = ['/pos/products', '/pos/dashboard', '/pos/settings']
+const CASHIER_BLOCKED = ['/pos/products', '/pos/dashboard']
 
 export default async function PosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -49,7 +49,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
         <PosProvider profile={profile} shop={shop}>
           {shop && <OrderNotification shopId={shop.id} />}
           {profile.role === 'super_admin' ? children : (
-            <SubscriptionGuard shop={shop}>
+            <SubscriptionGuard shop={shop} role={profile.role}>
               {children}
             </SubscriptionGuard>
           )}
