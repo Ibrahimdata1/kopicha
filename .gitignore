@@ -23,6 +23,24 @@ yarn-error.log*
 # vercel
 .vercel
 
+# generated reports & screenshots (regenerate with: npx tsx e2e/generate-*.ts)
+*.pdf
+*.zip
+e2e/reports/
+e2e/screenshots/
+e2e/test-results/
+reports/
+
+# utility scripts with credentials (keep local only)
+e2e/capture-*.ts
+e2e/bypass-*.ts
+e2e/extend-*.ts
+e2e/fix-*.ts
+e2e/try-*.ts
+
+# seed data with credentials
+supabase/seed_demo.sql
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

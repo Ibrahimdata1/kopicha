@@ -82,9 +82,9 @@ const CREDS_PAGE = `
 <table>
 <tr><th colspan="3" style="background:#1e3a8a;color:white;text-align:center;padding:8px">🌐 URL: qrforpaytest.vercel.app</th></tr>
 <tr><th style="width:25%">Role</th><th style="width:37%">Email / Username</th><th style="width:38%">Password</th></tr>
-<tr style="background:#fef3c7"><td><strong>Super Admin</strong></td><td><span class="mono">superadmin@admin.com</span></td><td><span class="mono">admin123</span></td></tr>
-<tr><td><strong>Owner</strong></td><td><span class="mono">admin@admin.com</span></td><td><span class="mono">admin</span></td></tr>
-<tr style="background:#f0fdf4"><td><strong>Cashier</strong></td><td><span class="mono">newken</span></td><td><span class="mono">newken123</span></td></tr>
+<tr style="background:#fef3c7"><td><strong>Super Admin</strong></td><td><span class="mono">(ดูใน .env.local)</span></td><td><span class="mono">(ดูใน .env.local)</span></td></tr>
+<tr><td><strong>Owner</strong></td><td><span class="mono">(ดูใน .env.local)</span></td><td><span class="mono">(ดูใน .env.local)</span></td></tr>
+<tr style="background:#f0fdf4"><td><strong>Cashier</strong></td><td><span class="mono">(ดูใน .env.local)</span></td><td><span class="mono">(ดูใน .env.local)</span></td></tr>
 <tr><td></td><td colspan="2" style="font-size:0.65rem;color:#64748b">ร้าน kennyshop — login ด้วย username ในช่อง "อีเมล หรือ ชื่อผู้ใช้"</td></tr>
 </table>
 
