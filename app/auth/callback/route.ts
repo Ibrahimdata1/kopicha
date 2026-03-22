@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/pos/sessions'
+  // Whitelist safe redirect paths — prevent open redirect attacks
+  const SAFE_PATHS = ['/pos/sessions', '/pos/admin', '/pos/dashboard', '/pos/orders', '/pos/products', '/pos/tables', '/pos/settings', '/pending', '/register/shop']
+  const rawNext = searchParams.get('next')
+  const next = rawNext && SAFE_PATHS.includes(rawNext) ? rawNext : '/pos/sessions'
 
   if (code) {
     const cookieStore = await cookies()

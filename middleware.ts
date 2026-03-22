@@ -29,8 +29,18 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Protected API routes that require session (defense-in-depth)
+  const PROTECTED_API = [
+    '/api/create-cashier',
+    '/api/reset-cashier-password',
+    '/api/cashier-credentials',
+    '/api/upload-product-image',
+    '/api/omise/create-charge',
+  ]
+  const isProtectedApi = PROTECTED_API.some((p) => pathname.startsWith(p))
+
   const isPublic =
-    pathname.startsWith('/api') ||
+    (pathname.startsWith('/api') && !isProtectedApi) ||
     pathname.startsWith('/order') ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/login') ||

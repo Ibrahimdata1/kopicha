@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-  // Validate file type
+  // Validate file type (client-reported MIME)
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
   if (!allowedTypes.includes(file.type)) {
     return NextResponse.json({ error: 'ไฟล์ต้องเป็น JPG, PNG, WEBP หรือ GIF เท่านั้น' }, { status: 400 })
@@ -29,6 +29,17 @@ export async function POST(req: NextRequest) {
   // Validate file size (5 MB)
   if (file.size > 5 * 1024 * 1024) {
     return NextResponse.json({ error: 'ขนาดไฟล์ต้องไม่เกิน 5 MB' }, { status: 400 })
+  }
+
+  // Validate actual file signature (magic bytes) — don't trust client MIME
+  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+  const isJpeg = header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF
+  const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47
+  const isGif = header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46
+  const isWebp = header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
+                 header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50
+  if (!isJpeg && !isPng && !isGif && !isWebp) {
+    return NextResponse.json({ error: 'ไฟล์ไม่ใช่รูปภาพที่ถูกต้อง' }, { status: 400 })
   }
 
   // Upload via admin client (bypasses RLS)

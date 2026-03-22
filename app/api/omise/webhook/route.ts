@@ -50,13 +50,34 @@ function calcNewExpiry(currentExpiry: string | null, firstProductAt: string | nu
   return toBangkokDateStr(addOneMonth(base))
 }
 
+const Omise = require('omise')
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
     // Only handle successful charges
     if (body.key !== 'charge.complete') return NextResponse.json({ ok: true })
-    const charge = body.data
+    const webhookCharge = body.data
+    if (webhookCharge.status !== 'successful') return NextResponse.json({ ok: true })
+
+    // Verify charge by fetching directly from Omise API with our secret key
+    // Never trust webhook body alone — attacker could forge it
+    const chargeId = webhookCharge.id
+    if (!chargeId || typeof chargeId !== 'string' || !chargeId.startsWith('chrg_')) {
+      return NextResponse.json({ error: 'Invalid charge ID' }, { status: 400 })
+    }
+
+    const secretKey = process.env.OMISE_SECRET_KEY
+    if (!secretKey) {
+      console.error('OMISE_SECRET_KEY not configured')
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+    }
+
+    const omise = Omise({ secretKey })
+    const charge = await omise.charges.retrieve(chargeId)
+
+    // Use verified data from Omise API, not from webhook body
     if (charge.status !== 'successful') return NextResponse.json({ ok: true })
 
     const shopId = charge.metadata?.shopId

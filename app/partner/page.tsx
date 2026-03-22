@@ -176,6 +176,7 @@ export default function PartnerPage() {
                 placeholder="ชื่อ นามสกุล"
                 required
                 autoFocus
+                maxLength={100}
               />
             </div>
             <div>
@@ -186,10 +187,12 @@ export default function PartnerPage() {
               <input
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                 className="input"
                 placeholder="0812345678"
                 required
+                maxLength={10}
+                inputMode="numeric"
               />
             </div>
             <div>

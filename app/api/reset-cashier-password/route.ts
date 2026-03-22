@@ -26,6 +26,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'profile_id and new_password required' }, { status: 400 })
   }
 
+  // Password validation — same rules as create-cashier
+  if (/[^\x20-\x7E]/.test(new_password)) {
+    return NextResponse.json({ error: 'รหัสผ่านใช้ได้เฉพาะตัวอักษรภาษาอังกฤษและตัวเลขเท่านั้น' }, { status: 400 })
+  }
+  if (new_password.length < 8) {
+    return NextResponse.json({ error: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' }, { status: 400 })
+  }
+  if (!/[0-9]/.test(new_password)) {
+    return NextResponse.json({ error: 'รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว' }, { status: 400 })
+  }
+  if (new_password.length > 100) {
+    return NextResponse.json({ error: 'รหัสผ่านต้องไม่เกิน 100 ตัวอักษร' }, { status: 400 })
+  }
+
   // Verify the target is a cashier in the same shop
   const { data: target } = await supabase
     .from('profiles')

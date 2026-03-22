@@ -9,8 +9,19 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // Verify user owns this shop
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('shop_id')
+      .eq('id', user.id)
+      .single()
+
     const { amount, shopId } = await req.json()
     if (!amount || !shopId) return NextResponse.json({ error: 'Missing params' }, { status: 400 })
+
+    if (!profile?.shop_id || profile.shop_id !== shopId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const omise = Omise({ secretKey: process.env.OMISE_SECRET_KEY })
 
