@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
   if (!email || !password) return NextResponse.json({ error: 'email and password required' }, { status: 400 })
   if (/[^\x20-\x7E]/.test(password)) return NextResponse.json({ error: 'รหัสผ่านใช้ได้เฉพาะตัวอักษรภาษาอังกฤษและตัวเลขเท่านั้น' }, { status: 400 })
   if (password.length < 8) return NextResponse.json({ error: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' }, { status: 400 })
+  if (password.length > 100) return NextResponse.json({ error: 'รหัสผ่านต้องไม่เกิน 100 ตัวอักษร' }, { status: 400 })
   if (!/[0-9]/.test(password)) return NextResponse.json({ error: 'รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว' }, { status: 400 })
 
   const admin = createAdminClient(
